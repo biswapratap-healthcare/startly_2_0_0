@@ -1,0 +1,10 @@
+__pycache__
+.idea/
+venv/
+*.pkl
+data/
+comparison.pkl
+ref.jpeg
+result/
+data_g/
+
