@@ -1,15 +1,14 @@
 import os
 import shutil
-
-import cv2
 import glob
 import pickle
-import numpy as np
 import tensorflow as tf
-from keras.applications import vgg19
+import numpy as np
+from PIL import Image
+from keras import models
+from tensorflow.python.keras.preprocessing import image as kp_image
 
-import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1 import ImageGrid
+content_layers = ['block5_conv2']
 
 style_layers = ['block1_conv1',
                 'block2_conv1',
@@ -18,102 +17,134 @@ style_layers = ['block1_conv1',
                 'block5_conv1',
                 'block5_pool']
 
+num_content_layers = len(content_layers)
+num_style_layers = len(style_layers)
 
-def preprocess_image(image_path):
-    width, height = tf.keras.preprocessing.image.load_img(image_path).size
-    img_n_rows = 400
-    img_n_cols = int(width * img_n_rows / height)
-    img = tf.keras.preprocessing.image.load_img(
-        image_path, target_size=(img_n_rows, img_n_cols)
-    )
-    img = tf.keras.preprocessing.image.img_to_array(img)
+
+def gram_matrix(input_tensor):
+    channels = int(input_tensor.shape[-1])
+    a = tf.reshape(input_tensor, [-1, channels])
+    n = tf.shape(a)[0]
+    gram = tf.matmul(a, a, transpose_a=True)
+    return gram / tf.cast(n, tf.float32)
+
+
+def get_style_loss(base_style, gram_target):
+    gram_style = gram_matrix(base_style)
+    return tf.reduce_mean(tf.square(gram_style - gram_target))
+
+
+def get_content_loss(base_content, target):
+    return tf.reduce_mean(tf.square(base_content - target))
+
+
+def load_img(path_to_img):
+    max_dim = 512
+    img = Image.open(path_to_img)
+    long = max(img.size)
+    scale = max_dim / long
+    img = img.resize((round(img.size[0] * scale), round(img.size[1] * scale)), Image.ANTIALIAS)
+    img = kp_image.img_to_array(img)
     img = np.expand_dims(img, axis=0)
-    img = vgg19.preprocess_input(img)
-    return tf.convert_to_tensor(img)
+    return img
 
 
-def gram_matrix(x):
-    x = tf.transpose(x, (2, 0, 1))
-    features = tf.reshape(x, (tf.shape(x)[0], -1))
-    gram = tf.matmul(features, tf.transpose(features))
-    return gram
+def load_and_process_img(path_to_img):
+    img = load_img(path_to_img)
+    img = tf.keras.applications.vgg19.preprocess_input(img)
+    return img
 
 
 def get_model():
-    model = vgg19.VGG19(weights="imagenet", include_top=False)
-    outputs_dict = dict([(layer.name, layer.output) for layer in model.layers])
-    style_output_dict = {}
-    for s in style_layers:
-        style_output_dict[s] = outputs_dict[s]
-    feature_extractor = tf.keras.Model(inputs=model.inputs, outputs=style_output_dict)
-    return feature_extractor
+    vgg = tf.keras.applications.vgg19.VGG19(include_top=False, weights='imagenet')
+    vgg.trainable = False
+    style_outputs = [vgg.get_layer(name).output for name in style_layers]
+    content_outputs = [vgg.get_layer(name).output for name in content_layers]
+    model_outputs = style_outputs + content_outputs
+    return models.Model(vgg.input, model_outputs)
+
+
+def get_feature_representations(model, path):
+    preprocessed_image = load_and_process_img(path)
+    outputs = model(preprocessed_image)
+    style_features = [style_layer[0] for style_layer in outputs[:num_style_layers]]
+    content_features = [content_layer[0] for content_layer in outputs[num_style_layers:]]
+    return style_features, content_features
 
 
 def init():
-    feature_extractor = get_model()
+    model = get_model()
+    for layer in model.layers:
+        layer.trainable = False
     errors = list()
     for f in glob.glob('data/**/*.*', recursive=True):
         f_replace = f.replace('data', 'data_g')
         os.makedirs(f_replace, exist_ok=True)
         try:
-            style_reference_image = preprocess_image(f)
-            features = feature_extractor(style_reference_image)
-            for layer_name in style_layers:
-                pp = os.path.join(f_replace, layer_name + '.pkl')
+            style_features, content_features = get_feature_representations(model, f)
+            gram_style_features = [gram_matrix(style_feature) for style_feature in style_features]
+            for ln, c in zip(content_layers, content_features):
+                pp = os.path.join(f_replace, ln + '.pkl')
                 if os.path.exists(pp):
                     continue
-                layer_features = features[layer_name]
-                g = gram_matrix(layer_features[0])
+                file = open(pp, "xb")
+                pickle.dump(c, file)
+                file.close()
+            for ln, g in zip(style_layers, gram_style_features):
+                pp = os.path.join(f_replace, ln + '.pkl')
+                if os.path.exists(pp):
+                    continue
                 file = open(pp, "xb")
                 pickle.dump(g, file)
                 file.close()
-        except Exception as ex:
-            errors.append([ex, f])
-
-
-def style_loss(style, combination, img_n_rows, img_n_cols):
-    s = style
-    c = combination
-    channels = 3
-    size = img_n_rows * img_n_cols
-    return tf.reduce_sum(tf.square(s - c)) / (4.0 * (channels ** 2) * (size ** 2))
+        except Exception as e:
+            errors.append([e, f])
 
 
 def search(ref_image):
-    width, height = tf.keras.preprocessing.image.load_img(ref_image).size
-    img_n_rows = 400
-    img_n_cols = int(width * img_n_rows / height)
-    feature_extractor = get_model()
-    style_reference_image = preprocess_image(ref_image)
-    features = feature_extractor(style_reference_image)
+    model = get_model()
+    for layer in model.layers:
+        layer.trainable = False
+    style_features, content_features = get_feature_representations(model, ref_image)
     comp_dict = dict()
-    for layer_name in style_layers:
-        ref_layer_features = features[layer_name]
-        ref_gram_matrix = gram_matrix(ref_layer_features[0])
-        for f in glob.glob('data_g/**/' + layer_name + '.pkl', recursive=True):
+    # for ln, c in zip(content_layers, content_features):
+    #     for f in glob.glob('data_g/**/' + ln + '.pkl', recursive=True):
+    #         fn = f.replace('data_g', 'data')
+    #         fn = os.path.dirname(fn)
+    #         infile = open(f, 'rb')
+    #         c_comp = pickle.load(infile, encoding='bytes')
+    #         try:
+    #             c_loss = get_content_loss(c, c_comp).numpy()
+    #             comp_dict[ln].append([fn, c_loss])
+    #         except KeyError:
+    #             c_loss = get_content_loss(c, c_comp).numpy()
+    #             comp_dict[ln] = [[fn, c_loss]]
+    #     comp_dict[ln] = sorted(comp_dict[ln], key=lambda x: x[1])
+    for ln, s in zip(style_layers, style_features):
+        for f in glob.glob('data_g/**/' + ln + '.pkl', recursive=True):
             fn = f.replace('data_g', 'data')
             fn = os.path.dirname(fn)
             infile = open(f, 'rb')
-            comparison_gram_matrix = pickle.load(infile, encoding='bytes')
+            s_comp = pickle.load(infile, encoding='bytes')
             try:
-                s_loss = style_loss(ref_gram_matrix, comparison_gram_matrix, img_n_rows, img_n_cols).numpy()
-                comp_dict[layer_name].append([fn, s_loss])
+                s_loss = get_style_loss(s, s_comp).numpy()
+                comp_dict[ln].append([fn, s_loss])
             except KeyError:
-                s_loss = style_loss(ref_gram_matrix, comparison_gram_matrix, img_n_rows, img_n_cols).numpy()
-                comp_dict[layer_name] = [[fn, s_loss]]
-        comp_dict[layer_name] = sorted(comp_dict[layer_name], key=lambda x: x[1])
+                s_loss = get_style_loss(s, s_comp).numpy()
+                comp_dict[ln] = [[fn, s_loss]]
+        comp_dict[ln] = sorted(comp_dict[ln], key=lambda x: x[1])
 
     average = dict()
-    for k in comp_dict.keys():
-        for e in comp_dict[k]:
+    for k1 in comp_dict.keys():
+        for e in comp_dict[k1]:
             try:
                 average[e[0]] += e[1]
             except KeyError:
                 average[e[0]] = e[1]
 
-    comp_dict["average6"] = list()
-    for k in average.keys():
-        comp_dict["average6"].append([k, average[k] / 6])
+    comp_dict["average"] = list()
+    for k1 in average.keys():
+        comp_dict["average"].append([k1, average[k1] / 7])
     file = open("comparison.pkl", "xb")
     pickle.dump(comp_dict, file)
     file.close()
@@ -122,6 +153,7 @@ def search(ref_image):
 if __name__ == "__main__":
     if not os.path.exists('data_g'):
         init()
+    # exit(0)
     if not os.path.exists('comparison.pkl'):
         search(ref_image='ref.jpeg')
     comp_dict_file = open('comparison.pkl', 'rb')
