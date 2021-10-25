@@ -108,7 +108,7 @@ def get_64_model():
 
     # the second branch operates on the second input
     y = Dense(32, activation="relu")(input_b)
-    y = Dense(16, activation="relu")(y) 
+    y = Dense(16, activation="relu")(y)
     y = Model(inputs=input_b, outputs=y)
 
     # combine the output of the two branches
@@ -121,15 +121,33 @@ def get_64_model():
     # our model will accept the inputs of the two branches and then output a single value
     model = Model(inputs=[x.input, y.input], outputs=z)
 
-    opt = Adam(lr=0.00001)
+    opt = Adam(lr=0.0001)
     model.compile(loss="categorical_crossentropy", optimizer=opt, metrics=['accuracy'])
 
     return model
 
 
+def plot_distribution(train_data):
+    x_data = list()
+    y_data = list()
+    for x, td in enumerate(train_data[:100]):
+        try:
+            y = td[2].index(1)
+        except ValueError as e:
+            y = 0
+        x_data.append(x)
+        y_data.append(y)
+    import matplotlib.pyplot as plt
+    plt.plot(x_data, y_data)
+    plt.xlabel('x - axis')
+    plt.ylabel('y - axis')
+    plt.show()
+
+
 def train_data_block1_conv1_model():
     infile = open('train_data_block1_conv1_64.pkl', 'rb')
     train_data = pickle.load(infile, encoding='bytes')
+    # plot_distribution(train_data)
     model_64 = get_64_model()
     x1 = list()
     x2 = list()
@@ -143,7 +161,7 @@ def train_data_block1_conv1_model():
     y = np.array(y)
     model_64.fit(x=[x1, x2],
                  y=y,
-                 batch_size=50,
+                 batch_size=10,
                  epochs=50,
                  validation_split=0.33,
                  verbose=1)
