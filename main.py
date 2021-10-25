@@ -35,7 +35,9 @@ def get_style_loss(base_style, gram_target):
 
 
 def get_content_loss(base_content, target):
-    return tf.reduce_mean(tf.square(base_content - target))
+    g1 = gram_matrix(base_content)
+    g2 = gram_matrix(target)
+    return tf.reduce_mean(tf.square(g1 - g2))
 
 
 def load_img(path_to_img):
@@ -107,19 +109,19 @@ def search(ref_image):
         layer.trainable = False
     style_features, content_features = get_feature_representations(model, ref_image)
     comp_dict = dict()
-    # for ln, c in zip(content_layers, content_features):
-    #     for f in glob.glob('data_g/**/' + ln + '.pkl', recursive=True):
-    #         fn = f.replace('data_g', 'data')
-    #         fn = os.path.dirname(fn)
-    #         infile = open(f, 'rb')
-    #         c_comp = pickle.load(infile, encoding='bytes')
-    #         try:
-    #             c_loss = get_content_loss(c, c_comp).numpy()
-    #             comp_dict[ln].append([fn, c_loss])
-    #         except KeyError:
-    #             c_loss = get_content_loss(c, c_comp).numpy()
-    #             comp_dict[ln] = [[fn, c_loss]]
-    #     comp_dict[ln] = sorted(comp_dict[ln], key=lambda x: x[1])
+    for ln, c in zip(content_layers, content_features):
+        for f in glob.glob('data_g/**/' + ln + '.pkl', recursive=True):
+            fn = f.replace('data_g', 'data')
+            fn = os.path.dirname(fn)
+            infile = open(f, 'rb')
+            c_comp = pickle.load(infile, encoding='bytes')
+            try:
+                c_loss = get_content_loss(c, c_comp).numpy()
+                comp_dict[ln].append([fn, c_loss])
+            except KeyError:
+                c_loss = get_content_loss(c, c_comp).numpy()
+                comp_dict[ln] = [[fn, c_loss]]
+        comp_dict[ln] = sorted(comp_dict[ln], key=lambda x: x[1])
     for ln, s in zip(style_layers, style_features):
         for f in glob.glob('data_g/**/' + ln + '.pkl', recursive=True):
             fn = f.replace('data_g', 'data')
