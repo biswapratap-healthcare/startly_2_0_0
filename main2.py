@@ -96,9 +96,11 @@ def prepare_training_data():
     file.close()
 
 
-def get_64_model():
+def get_training_model(m):
+    n = m * m
+
     # define two sets of inputs
-    input_a = Input(shape=(4096,))
+    input_a = Input(shape=(n,))
     input_b = Input(shape=(7,))
 
     # the first branch operates on the first input
@@ -144,11 +146,35 @@ def plot_distribution(train_data):
     plt.show()
 
 
-def train_data_block1_conv1_model():
-    infile = open('train_data_block1_conv1_64.pkl', 'rb')
+def train_model(m):
+    if m == 'block1_conv1':
+        model_str = 'train_data_block1_conv1_64.pkl'
+        n = 64
+    elif m == 'block2_conv1':
+        model_str = 'train_data_block2_conv1_128.pkl'
+        n = 128
+    elif m == 'block3_conv1':
+        model_str = 'train_data_block3_conv1_256.pkl'
+        n = 256
+    elif m == 'block4_conv1':
+        model_str = 'train_data_block4_conv1_512.pkl'
+        n = 512
+    elif m == 'block5_conv1':
+        model_str = 'train_data_block5_conv1_512.pkl'
+        n = 512
+    elif m == 'block5_pool':
+        model_str = 'train_data_block5_pool_512.pkl'
+        n = 512
+    elif m == 'block5_conv2':
+        model_str = 'train_data_block5_conv2_512.pkl'
+        n = 512
+    else:
+        return 'Invalid Model'
+
+    infile = open(model_str, 'rb')
     train_data = pickle.load(infile, encoding='bytes')
     # plot_distribution(train_data)
-    model_64 = get_64_model()
+    model = get_training_model(m=n)
     x1 = list()
     x2 = list()
     y = list()
@@ -159,16 +185,15 @@ def train_data_block1_conv1_model():
     x1 = np.array(x1)
     x2 = np.array(x2)
     y = np.array(y)
-    model_64.fit(x=[x1, x2],
-                 y=y,
-                 batch_size=10,
-                 epochs=50,
-                 validation_split=0.33,
-                 verbose=1)
+    model.fit(x=[x1, x2],
+              y=y,
+              batch_size=10,
+              epochs=50,
+              validation_split=0.33,
+              verbose=1)
 
 
 if __name__ == "__main__":
-    # if not os.path.exists('training_data.pkl'):
-    #    prepare_training_data()
-    # exit(0)
-    train_data_block1_conv1_model()
+    if not os.path.exists('training_data.pkl'):
+        prepare_training_data()
+    train_model(m='block5_conv2')
