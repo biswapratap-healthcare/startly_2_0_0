@@ -8,16 +8,17 @@ import matplotlib.image as mpimg
 import glob
 import math
 
-from main import sqldb
-from model import get_loss, add_entry, get_input1, get_input2
+from model import init_model
+from functions import get_loss, add_entry, get_input1, get_input2, sqldb
 
 def get_img(style_vectors):
-    model = tf.keras.models.load_model(os.path.join('assets','model'))
+    model_dir = os.path.join('assets','model')
+    model = tf.keras.models.load_model(model_dir)
 
     image_data = sqldb.fetch_data(table='image_data')
     image_ids = set([e[0] for e in image_data])
-    # training_data = sqldb.fetch_data(table='training_data')
-    training_data = []
+    
+    training_data = sqldb.fetch_data(table='training_data')
     training_ids = set([e[0] for e in training_data])
     image_ids_to_train = image_ids - training_ids
     image_data = list(filter(lambda x: x[0] in image_ids_to_train, image_data))
@@ -25,6 +26,7 @@ def get_img(style_vectors):
     data = random.choice(image_data)
     id = data[0]
     image_vector_folder = sqldb.fetch_vector_paths(imageid=id)[0]
+    layer_order = [e.replace('.pkl','') for e in os.listdir(image_vector_folder)]
     image_vector = dict()
     for vector_file in glob.glob(os.path.join(image_vector_folder, '*.pkl')):
         file = open(vector_file, 'rb')
@@ -73,27 +75,36 @@ def get_img(style_vectors):
             loss = get_loss(image_vector[vector_file], style_vectors[style][vector_file]).numpy()
             losses.append(math.log(loss, 10))
         losses = np.array(losses)
-        # max = 0
-        max = losses.max()
-        min = losses.min()
-        # losss = []
-        # for loss in losses:
-        #     max += loss
-        delta = max - min
+        max_ = losses.max()
+        min_ = losses.min()
+        delta = max_ - min_
         for i in range(len(losses)):
-            print((losses[i] - min)*100/delta)
-            # losss.append(math.log(losses[i], 10))
-        # for loss in losss:
-        #     print(f"loss is {loss}")
-        print('found_loss')
+            losses[i] = (losses[i] - min_)*100/delta
+            
         x3 = losses
-            # score.append(int(input(f"Give score for {vector_file} loss for {style} layer out of 10: ")))
-        
         x3 = np.array([x3])
         y = model.predict([x1.reshape(x1.shape[0], -1), x2.reshape(x2.shape[0], -1), x3])
         
-        print(f"Predicted score for {style} is {y[0]}")
-        
+        weights = []
+        i=0
+        while i < 88:
+            temp = []
+            for j in range(i, i+11):
+                temp.append(y[0][j])
+            weights.append(np.argmax(np.asarray(temp)))
+            i += 11
+        p = 0
+        w_total = 0
+        for weight, loss in zip(weights, losses):
+            p+= weight*loss
+            w_total += weight
+        p = p/w_total
+
+        print('Layer_name: match% * weight = result')
+        for layer, loss, weight in zip(layer_order, losses, weights):
+            print(f'{layer}: {loss:.2f}% * {weight} = {loss*weight:.2f}%')
+        print(f'Total percentage match(with weighted average) for {style} is {p:.2f}%')
+
         for vector_file in style_vectors[style].keys():
             score.append(int(input(f"Give score for {vector_file} loss for {style} layer out of 10: ")))
         
@@ -113,4 +124,6 @@ def init():
             style_vectors[style][os.path.basename(vector_file)] = vector
     get_img(style_vectors)
 
-init()
+if __name__ == "__main__":
+    init_model()
+    init()
