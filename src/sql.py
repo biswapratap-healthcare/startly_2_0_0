@@ -1,13 +1,15 @@
 import datetime
 import psycopg2
-
+import os
+import json
 
 class SqlDatabase:
     def __init__(self, dbname="image_database", user="postgres", password=5711):
+        credentials = json.load(open(os.path.join('src', 'db_credentials.json')))
         self.config = {
-            "dbname": dbname,
-            "user": user,
-            "password": password
+            "dbname": credentials["dbname"],
+            "user": credentials["user"],
+            "password": credentials["password"]
         }
         self.connect()
         self.create_table()
