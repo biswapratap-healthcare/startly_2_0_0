@@ -108,6 +108,9 @@ def generate_average_vectors(sqldb):
                     average_dict[layer] += layer_matrix
                 except KeyError:
                     average_dict[layer] = layer_matrix
+
+        for layer in average_dict.count():
+            average_dict[layer] = average_dict[layer] / len(image_folder_list)
         style_dict[style_name] = average_dict
 
     for sk in style_dict.keys():
