@@ -155,9 +155,9 @@ def generatea_gram_matrices():
                 pickle.dump(c, file)
                 file.close()
             for ln, g in zip(style_layers, gram_style_features):
-                pad_size = int((512 - c.shape[0])/2)
+                pad_size = int((512 - g.shape[0])/2)
                 paddings = tf.constant([[pad_size, pad_size, ], [pad_size, pad_size]])
-                average += tf.pad(c, paddings, 'CONSTANT', constant_values=0)
+                average += tf.pad(g, paddings, 'CONSTANT', constant_values=0)
                 pp = os.path.join(f_replace, ln + '.pkl')
                 file = open(pp, "xb")
                 pickle.dump(g, file)
