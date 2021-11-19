@@ -289,8 +289,12 @@ def get_training_data():
     while idx < len(td):
         x1.append(get_input1(td[idx][0]))
         x2.append(get_input2(average_vectors, td[idx][1]))
-        x3.append(np.array(eval(td[idx][2])))
-        y.append(np.array(to_categorical_array(eval(td[idx][3]))))
+        a = td[idx][2]
+        b = eval(a)
+        x3.append(np.array(b))
+        a = td[idx][3]
+        b = eval(a)
+        y.append(np.array(to_categorical_array(b)))
         idx += 1
     
     x1 = np.array(x1)
