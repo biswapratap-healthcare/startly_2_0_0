@@ -1,7 +1,7 @@
 import os
 
-
-from tensorflow.keras.layers import *
+from keras import Input
+from keras.layers import Dense, concatenate
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
 from check_accuracy import check_accuracy
