@@ -1,0 +1,6 @@
+Put image data in folder assets//data//
+
+Postgress credentials:
+    dbname="image_database"
+    user="postgres"
+    password=5711
