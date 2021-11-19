@@ -121,7 +121,7 @@ def generate_average_vectors(sqldb):
             if os.path.exists(file_path):
                 os.remove(file_path)
             file = open(file_path, "xb")
-            pickle.dump(average_dict[k], file)
+            pickle.dump(style_dict[sk][k], file)
             file.close()
         sqldb.insert_average_vector_data(sk, f_path)
 
