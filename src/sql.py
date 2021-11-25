@@ -225,7 +225,10 @@ class SqlDatabase:
                                             SELECT vector_folder_path FROM vector_data WHERE image_id = '{image_id}';
                                             '''
                 self.cur.execute(sql_syntax)
-                vector_folder_paths.append(self.cur.fetchall()[0][0])
+                vector_path = self.cur.fetchall()
+                print(vector_path)
+                print(vector_path[0])
+                vector_folder_paths.append(vector_path[0][0])
                 self.commit()
 
         return vector_folder_paths

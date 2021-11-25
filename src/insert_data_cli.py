@@ -8,8 +8,10 @@ import matplotlib.image as mpimg
 import glob
 import math
 
-from model import init_model
-from functions import get_loss, add_entry, get_input1, get_input2, sqldb
+from tensorflow.python.keras.engine import training
+
+from .model import init_model
+from .functions import get_loss, add_entry, get_input1, get_input2, sqldb
 
 def get_img(style_vectors):
     model_dir = os.path.join('assets','model')
@@ -19,7 +21,8 @@ def get_img(style_vectors):
     image_ids = set([e[0] for e in image_data])
     
     training_data = sqldb.fetch_data(table='training_data')
-    training_ids = set([e[0] for e in training_data])
+    # training_ids = set([e[0] for e in training_data])
+    training_ids = set()
     image_ids_to_train = image_ids - training_ids
     image_data = list(filter(lambda x: x[0] in image_ids_to_train, image_data))
     
@@ -83,25 +86,22 @@ def get_img(style_vectors):
             
         x3 = losses
         x3 = np.array([x3])
-        y = model.predict([x1.reshape(x1.shape[0], -1), x2.reshape(x2.shape[0], -1), x3])
+        y = model.predict([x1.reshape(x1.shape[0], -1), x2.reshape(x2.shape[0], -1), x3])[0]
         
-        weights = []
         i=0
-        while i < 88:
-            temp = []
-            for j in range(i, i+11):
-                temp.append(y[0][j])
-            weights.append(np.argmax(np.asarray(temp)))
-            i += 11
+        while i < len(y):
+            y[i] = y[i]*10
+            print(y[i])
+            i += 1
         p = 0
         w_total = 0
-        for weight, loss in zip(weights, losses):
+        for weight, loss in zip(y, losses):
             p+= weight*loss
             w_total += weight
         p = p/w_total
 
         print('Layer_name: match% * weight = result')
-        for layer, loss, weight in zip(layer_order, losses, weights):
+        for layer, loss, weight in zip(layer_order, losses, y):
             print(f'{layer}: {loss:.2f}% * {weight} = {loss*weight:.2f}%')
         print(f'Total percentage match(with weighted average) for {style} is {p:.2f}%')
 

@@ -1,6 +1,6 @@
 import sys
 sys.path.extend(['/Users/divy/Desktop/Divy/Image Clasification(Biswa)/startly_2_0_0-cli'])
-from src.sql import SqlDatabase
+from .sql import SqlDatabase
 
 import os
 import glob
@@ -92,8 +92,12 @@ def generate_average_vectors(sqldb):
     os.makedirs(average_vector_folder, exist_ok=True)
     styles = sqldb.fetch_data(table='styles')
     for style in styles:
-        average_dict = {}
         style_name = style[0]
+        f_path = os.path.join(average_vector_folder, style_name)
+        if os.path.exists(f_path):
+            style_dict[style_name] = None
+            continue
+        average_dict = {}
         image_folder_list = sqldb.fetch_vector_paths(style=style_name)
         for image_folder in image_folder_list:
             for layer_file in os.listdir(image_folder):
@@ -115,14 +119,17 @@ def generate_average_vectors(sqldb):
 
     for sk in style_dict.keys():
         f_path = os.path.join(average_vector_folder, sk)
-        os.makedirs(f_path, exist_ok=True)
-        for k in style_dict[sk].keys():
-            file_path = os.path.join(f_path, k)
-            if os.path.exists(file_path):
-                os.remove(file_path)
-            file = open(file_path, "xb")
-            pickle.dump(style_dict[sk][k], file)
-            file.close()
+        if os.path.exists(f_path):
+            pass
+        else:    
+            os.makedirs(f_path, exist_ok=True)
+            for k in style_dict[sk].keys():
+                file_path = os.path.join(f_path, k)
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                file = open(file_path, "xb")
+                pickle.dump(style_dict[sk][k], file)
+                file.close()
         sqldb.insert_average_vector_data(sk, f_path)
 
 
@@ -143,6 +150,9 @@ def generatea_gram_matrices():
         f_replace = os.path.join('assets//data_g', style, f_folder)
         os.makedirs(f_replace, exist_ok=True)
         try:
+            if os.path.exists(f_replace):
+                sqldb.insert_vector_data(image_id=image_data[0], vector_path=f_replace)
+                continue
             average = tf.zeros(
                                 (512, 512), dtype=tf.dtypes.float32, name=None
                             )
@@ -150,26 +160,33 @@ def generatea_gram_matrices():
             gram_style_features = [gram_matrix(style_feature) for style_feature in style_features]
             gram_content_features = [gram_matrix(content_feature) for content_feature in content_features]
             for ln, c in zip(content_layers, gram_content_features):
+                pp = os.path.join(f_replace, ln + '.pkl')
+                if os.path.exists(pp):
+                    continue
                 pad_size = int((512 - c.shape[0])/2)
                 paddings = tf.constant([[pad_size, pad_size, ], [pad_size, pad_size]])
                 average += tf.pad(c, paddings, 'CONSTANT', constant_values=0)
-                pp = os.path.join(f_replace, ln + '.pkl')
                 file = open(pp, "xb")
                 pickle.dump(c, file)
                 file.close()
             for ln, g in zip(style_layers, gram_style_features):
+                pp = os.path.join(f_replace, ln + '.pkl')
+                if os.path.exists(pp):
+                    continue
                 pad_size = int((512 - g.shape[0])/2)
                 paddings = tf.constant([[pad_size, pad_size, ], [pad_size, pad_size]])
                 average += tf.pad(g, paddings, 'CONSTANT', constant_values=0)
-                pp = os.path.join(f_replace, ln + '.pkl')
                 file = open(pp, "xb")
                 pickle.dump(g, file)
                 file.close()
             average /= (num_style_layers + num_content_layers)
             pp = os.path.join(f_replace, 'average' + '.pkl')
-            file = open(pp, "xb")
-            pickle.dump(average, file)
-            file.close()
+            if os.path.exists(pp):
+                pass
+            else:
+                file = open(pp, "xb")
+                pickle.dump(average, file)
+                file.close()
             sqldb.insert_vector_data(image_id=image_data[0], vector_path=f_replace)
         except Exception as e:
             print(e)
@@ -179,30 +196,35 @@ def generatea_gram_matrices():
 
 ## Functions for random training
 def add_entry(image_id, style_name, loss, score):
+    # print("Adding entry to database")
     sqldb.insert_training_data(image_id, style_name, loss, score)
 
 
 def prepare_training_data():
     image_data = sqldb.fetch_data(table='image_data')
     image_ids = set([e[0] for e in image_data])
+    # print(len(image_ids))
     training_data = sqldb.fetch_data(table='training_data')
     training_ids = set([e[0] for e in training_data])
+    # print(len(training_ids))
     image_ids_to_train = image_ids - training_ids
+    # print(len(image_ids_to_train))
     image_data = filter(lambda x: x[0] in image_ids_to_train, image_data)
-
     # get the vectors for each style
     average_vectors = sqldb.fetch_data(table='average_vector_data')
+    # print(average_vectors)
     style_vectors = dict()
     for data in average_vectors:
         style = data[0]
         vector_folder_path = data[1]
+        # print(vector_folder_path)
         style_vectors[style] = dict()
         for vector_file in glob.glob(os.path.join(vector_folder_path, '*.pkl')):
             f = open(vector_file, 'rb')
             vector = pickle.load(f)
             f.close()
             style_vectors[style][os.path.basename(vector_file)] = vector
-
+    # print(style_vectors)
     for f in image_data:
         id = f[0]
         image_vector_folder = sqldb.fetch_vector_paths(imageid=id)[0]
@@ -259,15 +281,10 @@ def get_input2(average_vectors, style):
             break
     return style_vector.numpy()
 
-to_categorical = dict()
-for i in range(11):
-    to_categorical[i] = np.zeros(11)
-    to_categorical[i][i] = 1
-
-def to_categorical_array(x):
+def get_input4(x):
     i = 0
     while i < len(x):
-        x[i] = to_categorical[x[i]]
+        x[i] = x[i]/10
         i += 1
     return x
 
@@ -283,7 +300,7 @@ def get_training_data():
         x1.append(get_input1(td[i][0]))
         x2.append(get_input2(average_vectors, td[i][1]))
         x3.append(np.array(eval(td[i][2])))
-        y.append(np.array(to_categorical_array(eval(td[i][3]))))
+        y.append(np.array(get_input4(eval(td[i][3]))))
         i += 1
     
     x1 = np.array(x1)

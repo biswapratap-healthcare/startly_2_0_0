@@ -4,11 +4,10 @@ import os
 from tensorflow.keras.layers import *
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
-from check_accuracy import check_accuracy
 
-from main import init
-from functions import get_training_data, prepare_training_data, sqldb
-from check_accuracy import check_accuracy
+from .main import init
+from .functions import get_training_data, prepare_training_data, sqldb
+from .check_accuracy import check_accuracy
 
 def get_training_model():
     # define two sets of inputs
@@ -40,7 +39,7 @@ def get_training_model():
 
     # apply a FC layer and then a regression prediction on the combined outputs
     z = Dense(16, activation="relu")(combined)
-    z = Dense(88, activation="sigmoid")(z)
+    z = Dense(8, activation="softmax")(z)
     # our model will accept the inputs of the two branches and then output a single value
     model = Model(inputs=[a.input, b.input, c.input], outputs=z)
 
@@ -78,7 +77,6 @@ def train_model():
               verbose=1)
     model_dir = os.path.join('assets','model')
     model.save(model_dir)
-    sqldb.drop_table('training_data')
 
 
 def init_model():

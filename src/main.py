@@ -1,7 +1,7 @@
 import os
 import glob
 
-from functions import generatea_gram_matrices, insert_images
+from .functions import generatea_gram_matrices, insert_images
 
 def init():
     for f in glob.glob('assets//data/**/*.*', recursive=True):
