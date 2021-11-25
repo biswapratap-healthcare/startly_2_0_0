@@ -3,6 +3,7 @@ import os
 import glob
 import random
 import pickle
+import math
 import numpy as np
 import tensorflow as tf
 from PIL import Image
@@ -205,7 +206,7 @@ def prepare_training_data():
 
     count = 0
     for f in image_data:
-        if count > 9:
+        if count > 20:
             break
         count += 1
         idd = f[0]
@@ -218,16 +219,17 @@ def prepare_training_data():
             image_vector[os.path.basename(vector_file)] = vector
 
         f = f[1]
-        
+
         for style in style_vectors.keys():
-            losses = []
-            score = []
+            losses = list()
+            scores = np.random.dirichlet(np.ones(8), size=1) * 10
+            scores = list(scores.flatten())
+            scores = [math.ceil(score) / 10 for score in scores]
             for vector_file in style_vectors[style].keys():
                 vector_file = vector_file
                 loss = get_loss(image_vector[vector_file], style_vectors[style][vector_file]).numpy()
                 losses.append(loss)
-                score.append(random.randint(0, 10))
-            add_entry(idd, style, str(losses), str(score))
+            add_entry(idd, style, str(losses), str(scores))
 
 
 def get_input1(image_id):
@@ -294,7 +296,7 @@ def get_training_data():
         x3.append(np.array(b))
         a = td[idx][3]
         b = eval(a)
-        y.append(np.array(to_categorical_array(b)))
+        y.append(np.array(b))
         idx += 1
     
     x1 = np.array(x1)

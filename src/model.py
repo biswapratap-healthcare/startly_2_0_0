@@ -1,14 +1,12 @@
 import os
-
+import tensorflow as tf
 from keras import Input
-from keras.layers import Dense, concatenate
+from keras.layers import Dense, concatenate, Lambda
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
-from check_accuracy import check_accuracy
 
 from main import init
 from functions import get_training_data, prepare_training_data, sqldb
-from check_accuracy import check_accuracy
 
 
 def get_training_model():
@@ -40,15 +38,32 @@ def get_training_model():
     combined = concatenate([a.output, b.output, c.output])
 
     # apply a FC layer and then a regression prediction on the combined outputs
-    z = Dense(16, activation="relu")(combined)
-    z = Dense(88, activation="sigmoid")(z)
+    z = Dense(128, activation="relu")(combined)
+    z = Dense(8)(z)
+    z = Lambda(custom_layer)(z)
     # our model will accept the inputs of the two branches and then output a single value
     model = Model(inputs=[a.input, b.input, c.input], outputs=z)
 
     opt = Adam(learning_rate=0.0001)
-    model.compile(loss="binary_crossentropy", optimizer=opt, metrics=['accuracy'])
+    model.compile(loss="mae", optimizer=opt, metrics=['accuracy'])
+
+    print(model.summary())
 
     return model
+
+
+def custom_layer(tensor):
+    tensor = tf.divide(
+        tf.subtract(
+            tensor,
+            tf.reduce_min(tensor)
+        ),
+        tf.subtract(
+            tf.reduce_max(tensor),
+            tf.reduce_min(tensor)
+        )
+    )
+    return tensor
 
 
 def plot_distribution(train_data):
@@ -74,8 +89,8 @@ def train_model():
     model.fit(x=x,
               y=y,
               batch_size=10,
-              epochs=50,
-              validation_split=0.33,
+              epochs=20,
+              validation_split=0.30,
               verbose=1)
     model_dir = os.path.join('assets', 'model')
     model.save(model_dir)
@@ -84,10 +99,8 @@ def train_model():
 
 def init_model():
     # init()
-    prepare_training_data()
+    # prepare_training_data()
     train_model()
-    mse = check_accuracy()
-    print(f"Mean squared error is {mse}")
 
 
 if __name__ == "__main__":

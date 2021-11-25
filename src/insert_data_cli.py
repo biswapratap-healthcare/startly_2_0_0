@@ -53,8 +53,8 @@ def get_img(style_vectors):
         x2 = get_input2(average_vectors, style)
         x2 = np.array([x2])
 
-        losses = []
-        score = []
+        losses = list()
+        score = list()
 
         image_paths = sqldb.fetch_image_paths(style=style)
         image_paths = random.sample(image_paths, 9)
@@ -85,19 +85,13 @@ def get_img(style_vectors):
         x3 = losses
         x3 = np.array([x3])
         y = model.predict([x1.reshape(x1.shape[0], -1), x2.reshape(x2.shape[0], -1), x3])
+        weights = list(y.flatten())
+        weights = [math.floor(weight * 10) for weight in weights]
         
-        weights = []
-        i=0
-        while i < 88:
-            temp = []
-            for j in range(i, i+11):
-                temp.append(y[0][j])
-            weights.append(np.argmax(np.asarray(temp)))
-            i += 11
         p = 0
         w_total = 0
         for weight, loss in zip(weights, losses):
-            p+= weight*loss
+            p += weight*loss
             w_total += weight
         p = p/w_total
 
