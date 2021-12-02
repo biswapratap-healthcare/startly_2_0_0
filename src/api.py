@@ -10,6 +10,8 @@ from .functions import insert_images, sqldb
 
 from PIL import Image
 import io
+import glob
+import os
 
 def image_to_byte_array(image:Image):
   imgByteArr = io.BytesIO()
@@ -18,7 +20,8 @@ def image_to_byte_array(image:Image):
   return base64.b64encode(imgByteArr)
 
 def init():
-    insert_images()
+    for f in glob.glob('assets/data/**/*.*', recursive=True):
+        insert_images(f, os.path.basename(os.path.dirname(f)))
 
 image_size = (512, 512)
 def get_images():
@@ -51,7 +54,7 @@ def get_style_images(style_id, page_num=None):
         return None
 
 def create_app():
-    init()
+    # init()
     app = Flask("foo", instance_relative_config=True)
 
     api = Api(
@@ -67,7 +70,7 @@ def create_app():
 
     @api.route('/give_image')
     class GetImageService(Resource):
-        # @api.doc(responses={"response": 'json'})
+        @api.doc(responses={"response": 'json'})
         def get(self):
             try:
                 rv = dict()
