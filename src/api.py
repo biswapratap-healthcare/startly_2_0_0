@@ -32,7 +32,7 @@ def get_images():
     training_ids = set([e[0] for e in training_data])
     image_ids_to_train = image_ids - training_ids
     image_data = list(filter(lambda x: x[0] not in image_ids_to_train, image_data))
-    return image_to_byte_array(Image.open(image_data[0][1]).thumbnail(image_size))
+    return image_to_byte_array(Image.open(image_data[0][1]).thumbnail(image_size)), image_data[0][0]
 
 
 def get_style_images(style_id, page_num=None):
@@ -74,7 +74,7 @@ def create_app():
         def get(self):
             try:
                 rv = dict()
-                rv['image'] = get_images()
+                rv['image'], rv['image_id'] = get_images()
                 return rv, 200
             except Exception as e:
                 rv = dict()
@@ -107,6 +107,45 @@ def create_app():
                 page_no = args['page_num']
                 rv = dict()
                 rv['images'] = get_style_images(style_id, page_no)
+                rv['status'] = 'Success'
+                return rv, 200
+            except Exception as e:
+                rv = dict()
+                rv['status'] = str(e)
+                return rv, 404
+    
+    training_data = reqparse.RequestParser()
+    training_data.add_argument('image_id',
+                                         type=str,
+                                         help='Id of the image',
+                                         required=True)
+    training_data.add_argument('style_id',
+                                         type=str,
+                                         help='Id of the style',
+                                         required=True)
+    training_data.add_argument('precentageMatch',
+                                         type=str,
+                                         help='Perecentage match given by user')
+
+    @api.route('/submit_result')
+    @api.expect(training_data)
+    class SubmitResult(Resource):
+        @api.expect(training_data)
+        @api.doc(responses={"response": 'json'})
+        def post(self):
+            try:
+                args = training_data.parse_args()
+            except Exception as e:
+                rv = dict()
+                rv['status'] = str(e)
+                return rv, 404
+            try:
+                image_id = int(args['image_id'])
+                style_id = int(args['style_id'])
+                precentageMatch = args['precentageMatch']
+                rv = dict()
+                rv['verificatioOfResponse'] = args
+                rv['Note'] = 'verificatioOfResponse will be removed in final build'
                 rv['status'] = 'Success'
                 return rv, 200
             except Exception as e:
