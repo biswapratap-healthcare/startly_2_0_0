@@ -1,29 +1,31 @@
+import io
+import os
+import glob
+import base64
 from PIL import Image
-
+from flask import Flask
 from waitress import serve
 from flask_cors import CORS
 from flask_restplus import Resource, Api, reqparse
-from flask import Flask
 
-import base64
-from .functions import insert_images, sqldb
+from functions import insert_images, sqldb
 
-from PIL import Image
-import io
-import glob
-import os
 
-def image_to_byte_array(image:Image):
-  imgByteArr = io.BytesIO()
-  image.save(imgByteArr, format=image.format)
-  imgByteArr = imgByteArr.getvalue()
-  return base64.b64encode(imgByteArr)
+def image_to_byte_array(image: Image):
+    img_byte_arr = io.BytesIO()
+    image.save(img_byte_arr, format=image.format)
+    img_byte_arr = img_byte_arr.getvalue()
+    return base64.b64encode(img_byte_arr)
+
 
 def init():
     for f in glob.glob('assets/data/**/*.*', recursive=True):
         insert_images(f, os.path.basename(os.path.dirname(f)))
 
+
 image_size = (512, 512)
+
+
 def get_images():
     image_data = sqldb.fetch_data(table='image_data')
     image_ids = set([e[0] for e in image_data])
@@ -53,8 +55,9 @@ def get_style_images(style_id, page_num=None):
     except IndexError:
         return None
 
+
 def create_app():
-    # init()
+    init()
     app = Flask("foo", instance_relative_config=True)
 
     api = Api(
@@ -83,14 +86,14 @@ def create_app():
 
     get_style = reqparse.RequestParser()
     get_style.add_argument('style_id',
-                                         type=str,
-                                         help='Id of the style',
-                                         required=True)
+                           type=str,
+                           help='Id of the style',
+                           required=True)
     get_style.add_argument('page_num',
-                                         type=str,
-                                         help='Page number of the style images(10/page)')
+                           type=str,
+                           help='Page number of the style images(10/page)')
 
-    @api.route('/get_stlye_images')
+    @api.route('/get_style_images')
     @api.expect(get_style)
     class GetStyleImage(Resource):
         @api.expect(get_style)
@@ -116,16 +119,16 @@ def create_app():
     
     training_data = reqparse.RequestParser()
     training_data.add_argument('image_id',
-                                         type=str,
-                                         help='Id of the image',
-                                         required=True)
+                               type=str,
+                               help='Id of the image',
+                               required=True)
     training_data.add_argument('style_id',
-                                         type=str,
-                                         help='Id of the style',
-                                         required=True)
-    training_data.add_argument('precentageMatch',
-                                         type=str,
-                                         help='Perecentage match given by user')
+                               type=str,
+                               help='Id of the style',
+                               required=True)
+    training_data.add_argument('percentage_match',
+                               type=str,
+                               help='Percentage match given by user')
 
     @api.route('/submit_result')
     @api.expect(training_data)
@@ -142,10 +145,10 @@ def create_app():
             try:
                 image_id = int(args['image_id'])
                 style_id = int(args['style_id'])
-                precentageMatch = args['precentageMatch']
+                percentage_match = args['percentage_match']
                 rv = dict()
-                rv['verificatioOfResponse'] = args
-                rv['Note'] = 'verificatioOfResponse will be removed in final build'
+                rv['verification_of_response'] = args
+                rv['note'] = 'verification_of_response will be removed in final build'
                 rv['status'] = 'Success'
                 return rv, 200
             except Exception as e:
@@ -153,8 +156,6 @@ def create_app():
                 rv['status'] = str(e)
                 return rv, 404
     return app
-
-
 
 
 if __name__ == "__main__":

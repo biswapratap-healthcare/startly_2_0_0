@@ -5,3 +5,8 @@ Pillow==8.4.0
 psycopg2
 matplotlib==3.5.0
 scikit-learn==1.0.1
+Flask==1.1.2
+Flask-Cors==3.0.10
+flask-restplus==0.13.0
+Werkzeug==0.16.1
+waitress==2.0.0
