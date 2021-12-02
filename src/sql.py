@@ -24,7 +24,7 @@ class SqlDatabase:
         :return:
         """
         self.conn = psycopg2.connect(
-            f'dbname={self.config["dbname"]} user={self.config["user"]} password={self.config["password"]}')
+            f'dbname={self.config["dbname"]} user={self.config["user"]} host=\'localhost\' password={self.config["password"]}')
         self.cur = self.conn.cursor()
         return None
 
