@@ -6,7 +6,7 @@ import json
 
 class SqlDatabase:
     def __init__(self, dbname="image_database", user="postgres", password=5711):
-        credentials = json.load(open('db_credentials.json'))
+        credentials = json.load(open(os.path.join('src','db_credentials.json')))
         self.config = {
             "dbname": credentials["dbname"],
             "user": credentials["user"],
