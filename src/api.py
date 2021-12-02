@@ -11,15 +11,16 @@ from flask_restplus import Resource, Api, reqparse
 from functions import insert_images, sqldb
 
 
-def image_to_byte_array(image: Image):
+def image_to_byte_array(image):
     img_byte_arr = io.BytesIO()
     image.save(img_byte_arr, format=image.format)
     img_byte_arr = img_byte_arr.getvalue()
-    return base64.b64encode(img_byte_arr)
+    ret = base64.b64encode(img_byte_arr).decode("utf-8")
+    return ret
 
 
 def init():
-    for f in glob.glob('assets/data/**/*.*', recursive=True):
+    for f in glob.glob('src/assets/data/**/*.*', recursive=True):
         insert_images(f, os.path.basename(os.path.dirname(f)))
 
 
@@ -29,12 +30,17 @@ image_size = (512, 512)
 def get_images():
     image_data = sqldb.fetch_data(table='image_data')
     image_ids = set([e[0] for e in image_data])
-    
+
     training_data = sqldb.fetch_data(table='training_data')
     training_ids = set([e[0] for e in training_data])
+
     image_ids_to_train = image_ids - training_ids
-    image_data = list(filter(lambda x: x[0] not in image_ids_to_train, image_data))
-    return image_to_byte_array(Image.open(image_data[0][1]).thumbnail(image_size)), image_data[0][0]
+    image_data = list(filter(lambda x: x[0] in image_ids_to_train, image_data))
+
+    img = image_data[0][1]
+    pil_img = Image.open(img)
+    pil_img.thumbnail(image_size)
+    return image_to_byte_array(pil_img), str(image_data[0][0])
 
 
 def get_style_images(style_id, page_num=None):
@@ -43,7 +49,7 @@ def get_style_images(style_id, page_num=None):
         if page_num is None:
             page_num = 0
         else:
-            page_num = int(page_num)  - 1
+            page_num = int(page_num) - 1
         style = styles[style_id][0]
         images = []
         style_images = sqldb.fetch_image_paths(style=style)
@@ -57,7 +63,7 @@ def get_style_images(style_id, page_num=None):
 
 
 def create_app():
-    init()
+    # init()
     app = Flask("foo", instance_relative_config=True)
 
     api = Api(

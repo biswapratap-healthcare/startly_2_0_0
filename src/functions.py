@@ -1,4 +1,4 @@
-from src.sql import SqlDatabase
+from sql import SqlDatabase
 import os
 import glob
 import random
