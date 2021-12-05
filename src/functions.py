@@ -183,7 +183,7 @@ def generate_gram_matrices():
 
 # Functions for random training
 def add_entry(image_id, style_name, loss, score):
-    sqldb.insert_training_data(image_id, style_name, loss, score)
+    return sqldb.insert_training_data(image_id, style_name, loss, score)
 
 
 def prepare_training_data():
@@ -285,12 +285,13 @@ def to_categorical_array(x):
 
 
 def get_training_data():
+    training_threshold = 50
     x1 = list()
     x2 = list()
     x3 = list()
     y = list()
     td = sqldb.fetch_data(table='training_data')
-    if len(td) < 50:
+    if len(td) < training_threshold:
         return [], []
     average_vectors = sqldb.fetch_data(table='average_vector_data')
     idx = 0

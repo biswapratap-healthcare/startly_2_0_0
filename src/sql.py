@@ -140,12 +140,19 @@ class SqlDatabase:
             self.commit()
 
     def insert_training_data(self, image_id, style_name, layer_stats, score_stats):
-        sql_syntax = f'''
-                                            INSERT INTO training_data(image_id, style_name, layer_stats, score_stats)
-                                            VALUES('{image_id}', '{style_name}', '{layer_stats}', '{score_stats}');
-                                            '''
-        self.cur.execute(sql_syntax)
-        self.commit()
+        try:
+            sql_syntax = f'''
+                                                INSERT INTO training_data(image_id, style_name, layer_stats, score_stats)
+                                                VALUES('{image_id}', '{style_name}', '{layer_stats}', '{score_stats}');
+                                                '''
+            self.cur.execute(sql_syntax)
+            self.commit()
+            return "Success"
+        except Exception as e:
+            curs = self.conn.cursor()
+            curs.execute("ROLLBACK")
+            self.commit()
+            return "key Error" + str(e) 
 
     def fetch_data(self, table="image_data"):
         try:
@@ -157,8 +164,9 @@ class SqlDatabase:
             self.commit()
         except Exception as e:
             print("fetch data", e)
-            self.cur.close()
-            self.cur = self.conn.cursor()
+            curs = self.conn.cursor()
+            curs.execute("ROLLBACK")
+            self.commit()
             data = []
         return data
     

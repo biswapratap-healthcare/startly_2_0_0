@@ -162,8 +162,7 @@ def create_app():
                     vector_file = vector_file
                     loss = get_loss(image_vector[vector_file], style_vectors[style][vector_file]).numpy()
                     losses.append(math.log(loss, 10))
-                losses = np.array(losses)
-                match_percentage = losses.copy()
+                match_percentage = np.asarray(losses)
                 max_ = match_percentage.max()
                 min_ = match_percentage.min()
                 delta = max_ - min_
@@ -171,10 +170,8 @@ def create_app():
                 for i in range(len(match_percentage)):
                     match_percentage[i] = 100 - ((match_percentage[i] - min_)*100/delta)
                     score.append(10 - abs(percentage_match - match_percentage[i])/10)
-                add_entry(image_id, style_id, str(losses), str(score))
-
                 rv = dict()
-                rv['status'] = 'Success'
+                rv['status'] = add_entry(image_id, style, str(list(match_percentage)), str(score))
                 return rv, 200
             except Exception as e:
                 rv = dict()

@@ -6,7 +6,7 @@ from tensorflow.keras.layers import Dense, concatenate, Lambda
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
 
-from functions import get_training_data, sqldb
+from functions import get_training_data, prepare_training_data, sqldb
 
 
 def get_training_model():
@@ -88,7 +88,7 @@ def train_model():
     x, y = get_training_data()
     if len(x) == 0:
         return
-    model.fit(x=x,
+    hist = model.fit(x=x,
               y=y,
               batch_size=10,
               epochs=20,
@@ -98,9 +98,15 @@ def train_model():
     if os.path.exists(model_dir):
         shutil.rmtree(model_dir)
     model.save(model_dir)
+    accuracy = dict()
+    accuracy['training'] = hist.history['accuracy'][-1]
+    accuracy['validation'] = hist.history['val_accuracy'][-1]
     # sqldb.drop_table('training_data')
+    return accuracy
 
 
 def init_model():
-    train_model()
-    return "Success"
+    return train_model()
+
+if __name__ == '__main__':
+    print(init_model())
