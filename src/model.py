@@ -87,7 +87,7 @@ def train_model():
     model = get_training_model()
     x, y = get_training_data()
     if len(x) == 0:
-        return
+        return None
     hist = model.fit(x=x,
               y=y,
               batch_size=10,

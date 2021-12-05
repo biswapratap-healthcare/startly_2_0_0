@@ -21,9 +21,11 @@ def job():
         logger.debug(f"{datetime.datetime.now()}: Training started")
         start = time.time()
         accuracy = init_model()
+        if accuracy is None:
+            logger.debug(f"{datetime.datetime.now()}: Not adequate data for training")
         logger.debug(f"{datetime.datetime.now()}: Training ended in {str(datetime.timedelta(seconds = (time.time() - start)))}.")
-        logger.debug(f"{datetime.datetime.now()}: Train Accuracy: {accuracy['training']}")
-        logger.debug(f"{datetime.datetime.now()}: Validation Accuracy: {accuracy['validation']}")
+        logger.debug(f"{datetime.datetime.now()}: Train Accuracy: {accuracy['training']*100}%")
+        logger.debug(f"{datetime.datetime.now()}: Validation Accuracy: {accuracy['validation']*100}%")
         logger.debug("")
     except Exception as e:
         logger.debug(f"{datetime.datetime.now()}: Exception occured in Training -> {e}")
