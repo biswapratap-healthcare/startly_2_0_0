@@ -2,67 +2,26 @@ import io
 import os
 import glob
 import base64
+import math
 from PIL import Image
 from flask import Flask
 from waitress import serve
 from flask_cors import CORS
 from flask_restplus import Resource, Api, reqparse
+import pickle
+from functions import get_images, get_style_images, insert_images, add_entry, get_loss, sqldb
+from main import init
 
-from functions import insert_images, sqldb
-
-
-def image_to_byte_array(image):
-    img_byte_arr = io.BytesIO()
-    image.save(img_byte_arr, format=image.format)
-    img_byte_arr = img_byte_arr.getvalue()
-    ret = base64.b64encode(img_byte_arr).decode("utf-8")
-    return ret
-
-
-def init():
-    for f in glob.glob('src/assets/data/**/*.*', recursive=True):
-        insert_images(f, os.path.basename(os.path.dirname(f)))
+import numpy as np
+from dateutil.parser import parse
 
 
 image_size = (512, 512)
 
 
-def get_images():
-    image_data = sqldb.fetch_data(table='image_data')
-    image_ids = set([e[0] for e in image_data])
-
-    training_data = sqldb.fetch_data(table='training_data')
-    training_ids = set([e[0] for e in training_data])
-
-    image_ids_to_train = image_ids - training_ids
-    image_data = list(filter(lambda x: x[0] in image_ids_to_train, image_data))
-
-    img = image_data[0][1]
-    pil_img = Image.open(img)
-    pil_img.thumbnail(image_size)
-    return image_to_byte_array(pil_img), str(image_data[0][0])
-
-
-def get_style_images(style_id, page_num=None):
-    styles = sqldb.fetch_data(table='styles')
-    try:
-        if page_num is None:
-            page_num = 0
-        else:
-            page_num = int(page_num) - 1
-        style = styles[style_id][0]
-        images = []
-        style_images = sqldb.fetch_image_paths(style=style)
-        for image in style_images[page_num*10:page_num*10+10]:
-            image = Image.open(image)
-            image.thumbnail(image_size)
-            images.append(image_to_byte_array(image))
-        return str(images)
-    except IndexError:
-        return None
-
-
 def create_app():
+    #Uncomment to refresh the database
+    # sqldb.drop_all()
     # init()
     app = Flask("foo", instance_relative_config=True)
 
@@ -84,6 +43,24 @@ def create_app():
             try:
                 rv = dict()
                 rv['image'], rv['image_id'] = get_images()
+                return rv, 200
+            except Exception as e:
+                rv = dict()
+                rv['status'] = str(e)
+                return rv, 404
+    
+
+    @api.route('/give_style_dict')
+    class GetStyleDict(Resource):
+        @api.doc(responses={"response": 'json'})
+        def get(self):
+            try:
+                rv = dict()
+                style_dict = dict()
+                styles = sqldb.fetch_data(table='styles')
+                for style in styles:
+                    style_dict[style[0]] = style[1]
+                rv['style_dict'] = style_dict
                 return rv, 200
             except Exception as e:
                 rv = dict()
@@ -136,6 +113,12 @@ def create_app():
                                type=str,
                                help='Percentage match given by user')
 
+    average_vectors_g = None
+
+    def change_global_var(value):
+        global average_vectors_g
+        average_vectors_g = value
+
     @api.route('/submit_result')
     @api.expect(training_data)
     class SubmitResult(Resource):
@@ -151,10 +134,46 @@ def create_app():
             try:
                 image_id = int(args['image_id'])
                 style_id = int(args['style_id'])
-                percentage_match = args['percentage_match']
+                percentage_match = float(args['percentage_match'])
+                average_vectors = sqldb.fetch_data(table='average_vector_data')
+                if average_vectors_g != average_vectors:
+                    style_vectors = dict()
+                    for data in average_vectors:
+                        style = data[0]
+                        vector_folder_path = data[1]
+                        style_vectors[style] = dict()
+                        for vector_file in glob.glob(os.path.join(vector_folder_path, '*.pkl')):
+                            f = open(vector_file, 'rb')
+                            vector = pickle.load(f)
+                            f.close()
+                            style_vectors[style][os.path.basename(vector_file)] = vector
+                    change_global_var(average_vectors)
+                image_vector_folder = sqldb.fetch_vector_paths(imageid=image_id)[0]
+                image_vector = dict()
+                for vector_file in glob.glob(os.path.join(image_vector_folder, '*.pkl')):
+                    file = open(vector_file, 'rb')
+                    vector = pickle.load(file)
+                    file.close()
+                    image_vector[os.path.basename(vector_file)] = vector            
+                
+                losses = []
+                style = sqldb.fetch_style_name(style_id)
+                for vector_file in style_vectors[style].keys():
+                    vector_file = vector_file
+                    loss = get_loss(image_vector[vector_file], style_vectors[style][vector_file]).numpy()
+                    losses.append(math.log(loss, 10))
+                losses = np.array(losses)
+                match_percentage = losses.copy()
+                max_ = match_percentage.max()
+                min_ = match_percentage.min()
+                delta = max_ - min_
+                score = []
+                for i in range(len(match_percentage)):
+                    match_percentage[i] = 100 - ((match_percentage[i] - min_)*100/delta)
+                    score.append(10 - abs(percentage_match - match_percentage[i])/10)
+                add_entry(image_id, style_id, str(losses), str(score))
+
                 rv = dict()
-                rv['verification_of_response'] = args
-                rv['note'] = 'verification_of_response will be removed in final build'
                 rv['status'] = 'Success'
                 return rv, 200
             except Exception as e:

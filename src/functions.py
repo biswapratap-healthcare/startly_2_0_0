@@ -6,6 +6,8 @@ import pickle
 import math
 import numpy as np
 import tensorflow as tf
+import io
+import base64
 from PIL import Image
 from tensorflow.keras import models
 from tensorflow.python.keras.preprocessing import image as kp_image
@@ -30,7 +32,7 @@ style_layers = ['block1_conv1',
 
 num_content_layers = len(content_layers)
 num_style_layers = len(style_layers)
-
+image_size = (512, 512)
 
 def insert_images(file_path, style):
     sqldb.insert_images(file_path, style)
@@ -91,7 +93,7 @@ def generate_average_vectors(sqldb):
     styles = sqldb.fetch_data(table='styles')
     for style in styles:
         average_dict = {}
-        style_name = style[0]
+        style_name = style[1]
         image_folder_list = sqldb.fetch_vector_paths(style=style_name)
         n = len(image_folder_list)
         for image_folder in image_folder_list:
@@ -142,35 +144,36 @@ def generate_gram_matrices():
         style = image_data[2]
         f_folder = os.path.basename(f).split('.')[0]
         f_replace = os.path.join('assets//data_g', style, f_folder)
-        os.makedirs(f_replace, exist_ok=True)
         try:
-            average = tf.zeros(
-                                (512, 512), dtype=tf.dtypes.float32, name=None
-                            )
-            style_features, content_features = get_feature_representations(model, f)
-            gram_style_features = [gram_matrix(style_feature) for style_feature in style_features]
-            gram_content_features = [gram_matrix(content_feature) for content_feature in content_features]
-            for ln, c in zip(content_layers, gram_content_features):
-                pad_size = int((512 - c.shape[0])/2)
-                paddings = tf.constant([[pad_size, pad_size, ], [pad_size, pad_size]])
-                average += tf.pad(c, paddings, 'CONSTANT', constant_values=0)
-                pp = os.path.join(f_replace, ln + '.pkl')
+            if not os.path.exists(f_replace):
+                os.makedirs(f_replace, exist_ok=True)
+                average = tf.zeros(
+                                    (512, 512), dtype=tf.dtypes.float32, name=None
+                                )
+                style_features, content_features = get_feature_representations(model, f)
+                gram_style_features = [gram_matrix(style_feature) for style_feature in style_features]
+                gram_content_features = [gram_matrix(content_feature) for content_feature in content_features]
+                for ln, c in zip(content_layers, gram_content_features):
+                    pad_size = int((512 - c.shape[0])/2)
+                    paddings = tf.constant([[pad_size, pad_size, ], [pad_size, pad_size]])
+                    average += tf.pad(c, paddings, 'CONSTANT', constant_values=0)
+                    pp = os.path.join(f_replace, ln + '.pkl')
+                    file = open(pp, "xb")
+                    pickle.dump(c, file)
+                    file.close()
+                for ln, g in zip(style_layers, gram_style_features):
+                    pad_size = int((512 - g.shape[0])/2)
+                    paddings = tf.constant([[pad_size, pad_size, ], [pad_size, pad_size]])
+                    average += tf.pad(g, paddings, 'CONSTANT', constant_values=0)
+                    pp = os.path.join(f_replace, ln + '.pkl')
+                    file = open(pp, "xb")
+                    pickle.dump(g, file)
+                    file.close()
+                average /= (num_style_layers + num_content_layers)
+                pp = os.path.join(f_replace, 'average' + '.pkl')
                 file = open(pp, "xb")
-                pickle.dump(c, file)
+                pickle.dump(average, file)
                 file.close()
-            for ln, g in zip(style_layers, gram_style_features):
-                pad_size = int((512 - g.shape[0])/2)
-                paddings = tf.constant([[pad_size, pad_size, ], [pad_size, pad_size]])
-                average += tf.pad(g, paddings, 'CONSTANT', constant_values=0)
-                pp = os.path.join(f_replace, ln + '.pkl')
-                file = open(pp, "xb")
-                pickle.dump(g, file)
-                file.close()
-            average /= (num_style_layers + num_content_layers)
-            pp = os.path.join(f_replace, 'average' + '.pkl')
-            file = open(pp, "xb")
-            pickle.dump(average, file)
-            file.close()
             sqldb.insert_vector_data(image_id=image_data[0], vector_path=f_replace)
         except Exception as e:
             print(e)
@@ -229,6 +232,7 @@ def prepare_training_data():
                 vector_file = vector_file
                 loss = get_loss(image_vector[vector_file], style_vectors[style][vector_file]).numpy()
                 losses.append(loss)
+            
             add_entry(idd, style, str(losses), str(scores))
 
 
@@ -286,6 +290,8 @@ def get_training_data():
     x3 = list()
     y = list()
     td = sqldb.fetch_data(table='training_data')
+    if len(td) < 50:
+        return [], []
     average_vectors = sqldb.fetch_data(table='average_vector_data')
     idx = 0
     while idx < len(td):
@@ -307,3 +313,46 @@ def get_training_data():
     x2 = x2.reshape(x2.shape[0], -1)
     y = y.reshape(y.shape[0], -1)
     return [x1, x2, x3], y
+
+
+def get_images():
+    image_data = sqldb.fetch_data(table='image_data')
+    image_ids = set([e[0] for e in image_data])
+
+    training_data = sqldb.fetch_data(table='training_data')
+    training_ids = set([e[0] for e in training_data])
+
+    image_ids_to_train = image_ids - training_ids
+    image_data = list(filter(lambda x: x[0] in image_ids_to_train, image_data))
+
+    img = image_data[0][1]
+    pil_img = Image.open(img)
+    pil_img.thumbnail(image_size)
+    return image_to_byte_array(pil_img), str(image_data[0][0])
+
+
+def get_style_images(style_id, page_num=None):
+    styles = sqldb.fetch_data(table='styles')
+    try:
+        if page_num is None:
+            page_num = 0
+        else:
+            page_num = int(page_num) - 1
+        style = styles[style_id][1]
+        images = []
+        style_images = sqldb.fetch_image_paths(style=style)
+        for image in style_images[page_num*10:page_num*10+10]:
+            image = Image.open(image)
+            image.thumbnail(image_size)
+            images.append(image_to_byte_array(image))
+        return str(images)
+    except IndexError:
+        return None
+
+
+def image_to_byte_array(image):
+    img_byte_arr = io.BytesIO()
+    image.save(img_byte_arr, format=image.format)
+    img_byte_arr = img_byte_arr.getvalue()
+    ret = base64.b64encode(img_byte_arr).decode("utf-8")
+    return ret

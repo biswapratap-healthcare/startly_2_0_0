@@ -1,12 +1,12 @@
 import os
+import shutil
 import tensorflow as tf
-from keras import Input
-from keras.layers import Dense, concatenate, Lambda
+from tensorflow.keras import Input
+from tensorflow.keras.layers import Dense, concatenate, Lambda
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
 
-from main import init
-from functions import get_training_data, prepare_training_data, sqldb
+from functions import get_training_data, sqldb
 
 
 def get_training_model():
@@ -86,6 +86,8 @@ def plot_distribution(train_data):
 def train_model():
     model = get_training_model()
     x, y = get_training_data()
+    if len(x) == 0:
+        return
     model.fit(x=x,
               y=y,
               batch_size=10,
@@ -93,15 +95,12 @@ def train_model():
               validation_split=0.30,
               verbose=1)
     model_dir = os.path.join('assets', 'model')
+    if os.path.exists(model_dir):
+        shutil.rmtree(model_dir)
     model.save(model_dir)
     # sqldb.drop_table('training_data')
 
 
 def init_model():
-    # init()
-    # prepare_training_data()
     train_model()
-
-
-if __name__ == "__main__":
-    train_model()
+    return "Success"

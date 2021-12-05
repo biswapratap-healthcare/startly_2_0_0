@@ -122,5 +122,5 @@ def init():
 
 
 if __name__ == "__main__":
-    # init_model()
+    init_model()
     init()

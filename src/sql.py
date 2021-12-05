@@ -44,7 +44,7 @@ class SqlDatabase:
 
         sql_syntax = f'''
                     CREATE TABLE IF NOT EXISTS image_data (
-                        image_id TIMESTAMP NOT NULL,
+                        image_id SERIAL NOT NULL,
                         image_path VARCHAR NOT NULL,
                         style VARCHAR NOT NULL,
                         PRIMARY KEY (image_id)
@@ -55,7 +55,7 @@ class SqlDatabase:
 
         sql_syntax = f'''
                             CREATE TABLE IF NOT EXISTS vector_data (
-                                image_id TIMESTAMP NOT NULL,
+                                image_id INT NOT NULL,
                                 vector_folder_path VARCHAR NOT NULL,
                                 PRIMARY KEY (image_id),
                                 FOREIGN KEY(image_id) REFERENCES image_data(image_id)
@@ -78,6 +78,7 @@ class SqlDatabase:
 
         sql_syntax = f'''
                                             CREATE TABLE IF NOT EXISTS styles (
+                                                style_id SERIAL NOT NULL,
                                                 style VARCHAR NOT NULL,
                                                 PRIMARY KEY (style)
                                             )
@@ -87,7 +88,7 @@ class SqlDatabase:
 
         sql_syntax = f'''
                                     CREATE TABLE IF NOT EXISTS training_data (
-                                        image_id TIMESTAMP NOT NULL,
+                                        image_id INT NOT NULL,
                                         style_name VARCHAR NOT NULL,
                                         layer_stats VARCHAR NOT NULL,
                                         score_stats VARCHAR NOT NULL,
@@ -99,15 +100,14 @@ class SqlDatabase:
         self.commit()
 
     def insert_images(self, path, style):
-        timestamp = datetime.datetime.now()
         sql_syntax = f'''
-                            INSERT INTO image_data(image_id, image_path, style)
-                            VALUES('{timestamp}', '{path}', '{style}');
+                            INSERT INTO image_data(image_path, style)
+                            VALUES('{path}', '{style}');
                             '''
         self.cur.execute(sql_syntax)
         self.commit()
 
-        styles = [e[0] for e in self.fetch_data('styles')]
+        styles = [e[1] for e in self.fetch_data('styles')]
         if style not in styles:
             sql_syntax = f'''
                                         INSERT INTO styles(style)
@@ -118,12 +118,16 @@ class SqlDatabase:
         return None
 
     def insert_vector_data(self, image_id, vector_path):
-        sql_syntax = f'''
-                                    INSERT INTO vector_data(image_id, vector_folder_path)
-                                    VALUES('{image_id}', '{vector_path}');
-                                    '''
-        self.cur.execute(sql_syntax)
-        self.commit()
+        try:
+            sql_syntax = f'''
+                                        INSERT INTO vector_data(image_id, vector_folder_path)
+                                        VALUES('{image_id}', '{vector_path}');
+                                        '''
+            self.cur.execute(sql_syntax)
+            self.commit()
+        except:
+            self.cur.close()
+            self.cur = self.conn.cursor()
 
     def insert_average_vector_data(self, style, style_vector_folder_path):
         styles = [e[0] for e in self.fetch_data('average_vector_data')]
@@ -233,17 +237,24 @@ class SqlDatabase:
 
         return vector_folder_paths
 
-    def drop_table(self, table_name):
-        '''
-        Table name can be
-        "handwritting_data_to_train"
-        "handwritting_data_trained"
-        :param table_name:
-        :return:
-        '''
+    def fetch_style_name(self, styleid):
         sql_syntax = f'''
-                                DROP TABLE {table_name};
-                                '''
+                SELECT style FROM styles WHERE style_id = '{styleid}';
+                '''
+        self.cur.execute(sql_syntax)
+        style_name = self.cur.fetchall()[0][0]
+        self.commit()
+        return style_name
+    
+    def drop_all(self):
+        sql_syntax = f'''
+                DROP TABLE IF EXISTS training_data;
+                DROP TABLE IF EXISTS vector_data;
+                DROP TABLE IF EXISTS image_data;
+                DROP TABLE IF EXISTS styles;
+                DROP TABLE IF EXISTS average_vector_data;
+                '''
         self.cur.execute(sql_syntax)
         self.commit()
-        return None
+        self.create_table()
+sql = SqlDatabase()
