@@ -2,7 +2,7 @@ tensorflow==2.7.0
 numpy==1.19.5
 keras==2.6.0
 Pillow==8.4.0
-psycopg2
+psycopg2~=2.9.2
 matplotlib==3.5.0
 scikit-learn==1.0.1
 Flask==1.1.2
@@ -10,4 +10,4 @@ Flask-Cors==3.0.10
 flask-restplus==0.13.0
 Werkzeug==0.16.1
 waitress==2.0.0
-logging
+pytz~=2021.3

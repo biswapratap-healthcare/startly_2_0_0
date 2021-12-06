@@ -2,6 +2,11 @@ import datetime
 import psycopg2
 import os
 import json
+import pytz
+
+
+def get_utc_now():
+    return str(int(datetime.datetime.now(tz=pytz.utc).timestamp() * 1000))
 
 
 class SqlDatabase:
@@ -44,7 +49,7 @@ class SqlDatabase:
 
         sql_syntax = f'''
                     CREATE TABLE IF NOT EXISTS image_data (
-                        image_id SERIAL NOT NULL,
+                        image_id VARCHAR NOT NULL,
                         image_path VARCHAR NOT NULL,
                         style VARCHAR NOT NULL,
                         PRIMARY KEY (image_id)
@@ -55,7 +60,7 @@ class SqlDatabase:
 
         sql_syntax = f'''
                             CREATE TABLE IF NOT EXISTS vector_data (
-                                image_id INT NOT NULL,
+                                image_id VARCHAR NOT NULL,
                                 vector_folder_path VARCHAR NOT NULL,
                                 PRIMARY KEY (image_id),
                                 FOREIGN KEY(image_id) REFERENCES image_data(image_id)
@@ -78,7 +83,7 @@ class SqlDatabase:
 
         sql_syntax = f'''
                                             CREATE TABLE IF NOT EXISTS styles (
-                                                style_id SERIAL NOT NULL,
+                                                style_id VARCHAR NOT NULL,
                                                 style VARCHAR NOT NULL,
                                                 PRIMARY KEY (style)
                                             )
@@ -88,7 +93,7 @@ class SqlDatabase:
 
         sql_syntax = f'''
                                     CREATE TABLE IF NOT EXISTS training_data (
-                                        image_id INT NOT NULL,
+                                        image_id VARCHAR NOT NULL,
                                         style_name VARCHAR NOT NULL,
                                         layer_stats VARCHAR NOT NULL,
                                         score_stats VARCHAR NOT NULL,
@@ -100,18 +105,24 @@ class SqlDatabase:
         self.commit()
 
     def insert_images(self, path, style):
+        image_id = get_utc_now()
         sql_syntax = f'''
-                            INSERT INTO image_data(image_path, style)
-                            VALUES('{path}', '{style}');
+                            INSERT INTO image_data(image_id, image_path, style)
+                            VALUES('{image_id}', '{path}', '{style}');
                             '''
         self.cur.execute(sql_syntax)
         self.commit()
 
-        styles = [e[1] for e in self.fetch_data('styles')]
+        style_id = 0
+        styles = list()
+        for e in self.fetch_data('styles'):
+            styles.append(e[1])
+            style_id += 1
+
         if style not in styles:
             sql_syntax = f'''
-                                        INSERT INTO styles(style)
-                                        VALUES('{style}');
+                                        INSERT INTO styles(style_id, style)
+                                        VALUES('{style_id}', '{style}');
                                         '''
             self.cur.execute(sql_syntax)
             self.commit()

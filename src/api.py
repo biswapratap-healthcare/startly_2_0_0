@@ -1,26 +1,21 @@
-import io
 import os
 import glob
-import base64
 import math
-from PIL import Image
+import pickle
+import numpy as np
+from main import init
 from flask import Flask
 from waitress import serve
 from flask_cors import CORS
 from flask_restplus import Resource, Api, reqparse
-import pickle
-from functions import get_images, get_style_images, insert_images, add_entry, get_loss, sqldb
-from main import init
-
-import numpy as np
-from dateutil.parser import parse
+from functions import get_images, get_style_images, add_entry, get_loss, sqldb
 
 
 image_size = (512, 512)
 
 
 def create_app():
-    #Uncomment to refresh the database
+    # Uncomment to refresh the database
     # sqldb.drop_all()
     # init()
     app = Flask("foo", instance_relative_config=True)
@@ -48,7 +43,6 @@ def create_app():
                 rv = dict()
                 rv['status'] = str(e)
                 return rv, 404
-    
 
     @api.route('/give_style_dict')
     class GetStyleDict(Resource):
@@ -132,8 +126,8 @@ def create_app():
                 rv['status'] = str(e)
                 return rv, 404
             try:
-                image_id = int(args['image_id'])
-                style_id = int(args['style_id'])
+                image_id = args['image_id']
+                style_id = args['style_id']
                 percentage_match = float(args['percentage_match'])
                 average_vectors = sqldb.fetch_data(table='average_vector_data')
                 if average_vectors_g != average_vectors:

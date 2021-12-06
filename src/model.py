@@ -89,11 +89,11 @@ def train_model():
     if len(x) == 0:
         return None
     hist = model.fit(x=x,
-              y=y,
-              batch_size=10,
-              epochs=20,
-              validation_split=0.30,
-              verbose=1)
+                     y=y,
+                     batch_size=10,
+                     epochs=20,
+                     validation_split=0.30,
+                     verbose=1)
     model_dir = os.path.join('assets', 'model')
     if os.path.exists(model_dir):
         shutil.rmtree(model_dir)
@@ -107,6 +107,7 @@ def train_model():
 
 def init_model():
     return train_model()
+
 
 if __name__ == '__main__':
     print(init_model())

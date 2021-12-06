@@ -1,3 +1,5 @@
+import datetime
+
 from sql import SqlDatabase
 import os
 import glob
@@ -33,6 +35,7 @@ style_layers = ['block1_conv1',
 num_content_layers = len(content_layers)
 num_style_layers = len(style_layers)
 image_size = (512, 512)
+
 
 def insert_images(file_path, style):
     sqldb.insert_images(file_path, style)
@@ -87,7 +90,7 @@ def get_feature_representations(model, path):
 
 
 def generate_average_vectors(sqldb):
-    average_vector_folder = 'assets//average_g'
+    average_vector_folder = 'src//assets//average_g'
     style_dict = {}
     os.makedirs(average_vector_folder, exist_ok=True)
     styles = sqldb.fetch_data(table='styles')
@@ -135,15 +138,15 @@ def generate_gram_matrices():
         layer.trainable = False
     image_table = sqldb.fetch_data(table="image_data")
     vector_data = sqldb.fetch_data(table="vector_data")
-    image_ids = set([e[0] for e in vector_data])
-    image_ids = set([e[0] for e in image_table]) - image_ids
+    vector_ids = set([e[0] for e in vector_data])
+    image_ids = set([e[0] for e in image_table]) - vector_ids
     image_table = filter(lambda x: x[0] in image_ids, image_table)
 
     for image_data in image_table:
         f = image_data[1]
         style = image_data[2]
         f_folder = os.path.basename(f).split('.')[0]
-        f_replace = os.path.join('assets//data_g', style, f_folder)
+        f_replace = os.path.join('src//assets//data_g', style, f_folder)
         try:
             if not os.path.exists(f_replace):
                 os.makedirs(f_replace, exist_ok=True)
