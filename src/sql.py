@@ -120,6 +120,7 @@ class SqlDatabase:
             style_id += 1
 
         if style not in styles:
+            print("Inserted style: " + str(style))
             sql_syntax = f'''
                                         INSERT INTO styles(style_id, style)
                                         VALUES('{style_id}', '{style}');

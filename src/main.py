@@ -9,6 +9,7 @@ import os
 def init():
     for f in glob.glob('src/assets/data/**/*.*', recursive=True):
         insert_images(f, os.path.basename(os.path.dirname(f)))
+    print("Inserted all images and styles ...")
     generate_gram_matrices()
     
 

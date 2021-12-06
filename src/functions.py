@@ -117,6 +117,8 @@ def generate_average_vectors(sqldb):
         for k, v in average_dict.items():
             average_dict[k] = tf.divide(v, n)
 
+        print("Calculated average vectors for style: " + str(style))
+
         style_dict[style_name] = average_dict
 
     for style_key, style_value in style_dict.items():
@@ -129,6 +131,7 @@ def generate_average_vectors(sqldb):
             file = open(file_path, "xb")
             pickle.dump(v, file)
             file.close()
+        print("Inserted average vectors for style: " + str(style_key))
         sqldb.insert_average_vector_data(style_key, f_path)
 
 
@@ -142,6 +145,7 @@ def generate_gram_matrices():
     image_ids = set([e[0] for e in image_table]) - vector_ids
     image_table = filter(lambda x: x[0] in image_ids, image_table)
 
+    previous_style = ''
     for image_data in image_table:
         f = image_data[1]
         style = image_data[2]
@@ -178,6 +182,9 @@ def generate_gram_matrices():
                 pickle.dump(average, file)
                 file.close()
             sqldb.insert_vector_data(image_id=image_data[0], vector_path=f_replace)
+            if previous_style != style:
+                print("Inserted vector data for style: " + str(style))
+                previous_style = style
         except Exception as e:
             print(e)
             break

@@ -16,8 +16,8 @@ image_size = (512, 512)
 
 def create_app():
     # Uncomment to refresh the database
-    # sqldb.drop_all()
-    # init()
+    sqldb.drop_all()
+    init()
     app = Flask("foo", instance_relative_config=True)
 
     api = Api(
