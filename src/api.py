@@ -1,3 +1,4 @@
+import json
 import os
 import glob
 import math
@@ -95,17 +96,10 @@ def create_app():
                 return rv, 404
     
     training_data = reqparse.RequestParser()
-    training_data.add_argument('image_id',
+    training_data.add_argument('payload',
                                type=str,
-                               help='Id of the image',
+                               help='{"image_id" : "1638803707364", "style_list":[{"style_id":"1","percentage":"30"},{"style_id":"2","percentage":"40"}]}',
                                required=True)
-    training_data.add_argument('style_id',
-                               type=str,
-                               help='Id of the style',
-                               required=True)
-    training_data.add_argument('percentage_match',
-                               type=str,
-                               help='Percentage match given by user')
 
     average_vectors_g = None
 
@@ -126,46 +120,52 @@ def create_app():
                 rv['status'] = str(e)
                 return rv, 404
             try:
-                image_id = args['image_id']
-                style_id = args['style_id']
-                percentage_match = float(args['percentage_match'])
-                average_vectors = sqldb.fetch_data(table='average_vector_data')
-                if average_vectors_g != average_vectors:
-                    style_vectors = dict()
-                    for data in average_vectors:
-                        style = data[0]
-                        vector_folder_path = data[1]
-                        style_vectors[style] = dict()
-                        for vector_file in glob.glob(os.path.join(vector_folder_path, '*.pkl')):
-                            f = open(vector_file, 'rb')
-                            vector = pickle.load(f)
-                            f.close()
-                            style_vectors[style][os.path.basename(vector_file)] = vector
-                    change_global_var(average_vectors)
-                image_vector_folder = sqldb.fetch_vector_paths(imageid=image_id)[0]
-                image_vector = dict()
-                for vector_file in glob.glob(os.path.join(image_vector_folder, '*.pkl')):
-                    file = open(vector_file, 'rb')
-                    vector = pickle.load(file)
-                    file.close()
-                    image_vector[os.path.basename(vector_file)] = vector            
-                
-                losses = []
-                style = sqldb.fetch_style_name(style_id)
-                for vector_file in style_vectors[style].keys():
-                    vector_file = vector_file
-                    loss = get_loss(image_vector[vector_file], style_vectors[style][vector_file]).numpy()
-                    losses.append(math.log(loss, 10))
-                match_percentage = np.asarray(losses)
-                max_ = match_percentage.max()
-                min_ = match_percentage.min()
-                delta = max_ - min_
-                score = []
-                for i in range(len(match_percentage)):
-                    match_percentage[i] = 100 - ((match_percentage[i] - min_)*100/delta)
-                    score.append(10 - abs(percentage_match - match_percentage[i])/10)
                 rv = dict()
-                rv['status'] = add_entry(image_id, style, str(list(match_percentage)), str(score))
+                rv_status = list()
+                payload = args['payload']
+                payload_dict = json.loads(payload)
+                image_id = payload_dict['image_id']
+                style_list = payload_dict['style_list']
+                for style in style_list:
+                    style_id = style['style_id']
+                    percentage = int(style['percentage'])
+                    average_vectors = sqldb.fetch_data(table='average_vector_data')
+                    if average_vectors_g != average_vectors:
+                        style_vectors = dict()
+                        for data in average_vectors:
+                            style = data[0]
+                            vector_folder_path = data[1]
+                            style_vectors[style] = dict()
+                            for vector_file in glob.glob(os.path.join(vector_folder_path, '*.pkl')):
+                                f = open(vector_file, 'rb')
+                                vector = pickle.load(f)
+                                f.close()
+                                style_vectors[style][os.path.basename(vector_file)] = vector
+                        change_global_var(average_vectors)
+                    image_vector_folder = sqldb.fetch_vector_paths(imageid=image_id)[0]
+                    image_vector = dict()
+                    for vector_file in glob.glob(os.path.join(image_vector_folder, '*.pkl')):
+                        file = open(vector_file, 'rb')
+                        vector = pickle.load(file)
+                        file.close()
+                        image_vector[os.path.basename(vector_file)] = vector
+
+                    losses = []
+                    style = sqldb.fetch_style_name(style_id)
+                    for vector_file in style_vectors[style].keys():
+                        vector_file = vector_file
+                        loss = get_loss(image_vector[vector_file], style_vectors[style][vector_file]).numpy()
+                        losses.append(math.log(loss, 10))
+                    match_percentage = np.asarray(losses)
+                    max_ = match_percentage.max()
+                    min_ = match_percentage.min()
+                    delta = max_ - min_
+                    score = []
+                    for i in range(len(match_percentage)):
+                        match_percentage[i] = 100 - ((match_percentage[i] - min_)*100/delta)
+                        score.append(10 - abs(percentage - match_percentage[i])/10)
+                    rv_status.append(add_entry(image_id, style, str(list(match_percentage)), str(score)))
+                rv['status'] = rv_status
                 return rv, 200
             except Exception as e:
                 rv = dict()
