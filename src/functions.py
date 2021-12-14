@@ -350,12 +350,12 @@ def get_style_images(style_id, page_num=None):
         else:
             page_num = int(page_num) - 1
         style = styles[style_id][1]
-        images = []
+        images = list()
         style_images = sqldb.fetch_image_paths(style=style)
-        for image in style_images[page_num*10:page_num*10+10]:
-            image = Image.open(image)
-            image.thumbnail(image_size)
-            images.append(image_to_byte_array(image))
+        for image_ in style_images[page_num * 40: page_num * 40 + 40]:
+            image_ = Image.open(image_)
+            image_.thumbnail(image_size)
+            images.append(image_to_byte_array(image_))
         return str(images)
     except IndexError:
         return None
