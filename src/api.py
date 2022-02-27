@@ -32,13 +32,28 @@ def create_app():
 
     CORS(app)
 
+    give_image_parser = reqparse.RequestParser()
+    give_image_parser.add_argument('style',
+                                   type=str,
+                                   help='A sample image of this style',
+                                   required=True)
+
     @api.route('/give_image')
+    @api.expect(give_image_parser)
     class GetImageService(Resource):
+        @api.expect(give_image_parser)
         @api.doc(responses={"response": 'json'})
         def get(self):
             try:
+                args = give_image_parser.parse_args()
+            except Exception as e:
                 rv = dict()
-                rv['image'], rv['image_id'] = get_images()
+                rv['status'] = str(e)
+                return rv, 404
+            try:
+                rv = dict()
+                style = args['style']
+                rv['image'], rv['image_id'] = get_images(style)
                 return rv, 200
             except Exception as e:
                 rv = dict()

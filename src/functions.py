@@ -326,9 +326,9 @@ def get_training_data():
     return [x1, x2, x3], y
 
 
-def get_images():
+def get_images(style):
     image_data = sqldb.fetch_data(table='image_data')
-    image_ids = set([e[0] for e in image_data])
+    image_ids = set([e[0] for e in image_data if e[2] == style])
 
     training_data = sqldb.fetch_data(table='training_data')
     training_ids = set([e[0] for e in training_data])
