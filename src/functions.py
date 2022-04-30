@@ -93,7 +93,6 @@ def get_feature_representations(model, image_arr):
 
 
 def generate_average_vectors(sqldb):
-    style_dict = {}
     styles = sqldb.fetch_data(table='styles')
     for style in styles:
         average_dict = {}
@@ -109,9 +108,8 @@ def generate_average_vectors(sqldb):
                     average_dict[layer] = layer_matrix
         n = tf.constant(float(n))
         for k, v in average_dict.items():
-            average_dict[k] = tf.divide(v, n)
+            average_dict[k] = pickle.dumps(tf.divide(v, n))
         print("Calculated average vectors for style: " + str(style))
-        style_dict[style_name] = average_dict
         sqldb.insert_average_vector_data(style_name, average_dict)
         print("Inserted average vectors for style: " + str(style_name))
 
@@ -156,7 +154,6 @@ def generate_gram_matrices():
         except Exception as e:
             print(e)
             break
-    exit(0)
     generate_average_vectors(sqldb)
 
 
