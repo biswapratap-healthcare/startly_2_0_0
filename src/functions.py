@@ -17,6 +17,8 @@ from tensorflow.keras.preprocessing import image
 from tensorflow.keras.models import Model
 from tensorflow.keras.applications.vgg19 import VGG19, preprocess_input
 
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
 vgg = VGG19(include_top=False, weights='imagenet')
 vgg.trainable = False
 vgg = Model(inputs=vgg.input, outputs=vgg.output)
@@ -55,9 +57,10 @@ def get_loss(base, target):
     return tf.reduce_mean(tf.square(g1 - g2))
 
 
-def load_img(path_to_img):
+def load_img(image_arr):
     max_dim = 512
-    img = Image.open(path_to_img)
+    numpy_arr = pickle.loads(image_arr)
+    img = Image.fromarray(np.uint8(numpy_arr)).convert('RGB')
     long = max(img.size)
     scale = max_dim / long
     img = img.resize((round(img.size[0] * scale), round(img.size[1] * scale)), Image.ANTIALIAS)
@@ -66,8 +69,8 @@ def load_img(path_to_img):
     return img
 
 
-def load_and_process_img(path_to_img):
-    img = load_img(path_to_img)
+def load_and_process_img(image_arr):
+    img = load_img(image_arr)
     img = tf.keras.applications.vgg19.preprocess_input(img)
     return img
 
@@ -81,8 +84,8 @@ def get_model():
     return models.Model(vgg.input, model_outputs)
 
 
-def get_feature_representations(model, path):
-    preprocessed_image = load_and_process_img(path)
+def get_feature_representations(model, image_arr):
+    preprocessed_image = load_and_process_img(image_arr)
     outputs = model(preprocessed_image)
     style_features = [style_layer[0] for style_layer in outputs[:num_style_layers]]
     content_features = [content_layer[0] for content_layer in outputs[num_style_layers:]]
@@ -90,104 +93,70 @@ def get_feature_representations(model, path):
 
 
 def generate_average_vectors(sqldb):
-    average_vector_folder = 'src//assets//average_g'
     style_dict = {}
-    os.makedirs(average_vector_folder, exist_ok=True)
     styles = sqldb.fetch_data(table='styles')
     for style in styles:
         average_dict = {}
         style_name = style[1]
-        image_folder_list = sqldb.fetch_vector_paths(style=style_name)
-        n = len(image_folder_list)
-        for image_folder in image_folder_list:
-            for layer_file in os.listdir(image_folder):
-                if layer_file == ".DS_Store" or layer_file == "Icon\r":
-                    continue
-                layer = layer_file
-                layer_file = os.path.join(image_folder, layer_file)
-                layer_file = open(layer_file, 'rb')
-                layer_matrix = pickle.load(layer_file)
-                layer_file.close()
+        vector_list = sqldb.fetch_vector_paths(style=style_name)
+        n = len(vector_list)
+        for vector_dict in vector_list:
+            for layer, value in vector_dict.items():
+                layer_matrix = pickle.loads(value)
                 try:
                     average_dict[layer] += layer_matrix
                 except KeyError:
                     average_dict[layer] = layer_matrix
-
         n = tf.constant(float(n))
         for k, v in average_dict.items():
             average_dict[k] = tf.divide(v, n)
-
         print("Calculated average vectors for style: " + str(style))
-
         style_dict[style_name] = average_dict
-
-    for style_key, style_value in style_dict.items():
-        f_path = os.path.join(average_vector_folder, style_key)
-        os.makedirs(f_path, exist_ok=True)
-        for k, v in style_value.items():
-            file_path = os.path.join(f_path, k)
-            if os.path.exists(file_path):
-                os.remove(file_path)
-            file = open(file_path, "xb")
-            pickle.dump(v, file)
-            file.close()
-        print("Inserted average vectors for style: " + str(style_key))
-        sqldb.insert_average_vector_data(style_key, f_path)
+        sqldb.insert_average_vector_data(style_name, average_dict)
+        print("Inserted average vectors for style: " + str(style_name))
 
 
 def generate_gram_matrices():
     model = get_model()
     for layer in model.layers:
         layer.trainable = False
-    image_table = sqldb.fetch_data(table="image_data")
-    vector_data = sqldb.fetch_data(table="vector_data")
-    vector_ids = set([e[0] for e in vector_data])
+    image_table = sqldb.fetch_image_ids(table="image_table")
+    vector_table = sqldb.fetch_image_ids(table="vector_table")
+    vector_ids = set([e[0] for e in vector_table])
     image_ids = set([e[0] for e in image_table]) - vector_ids
     image_table = filter(lambda x: x[0] in image_ids, image_table)
 
     previous_style = ''
+    pickle_strings = dict()
     for image_data in image_table:
-        f = image_data[1]
-        style = image_data[2]
-        f_folder = os.path.basename(f).split('.')[0]
-        f_replace = os.path.join('src//assets//data_g', style, f_folder)
+        img_data = sqldb.fetch_image_data(image_id=image_data[0])
+        image_arr = img_data[0]
+        style = img_data[1]
         try:
-            if not os.path.exists(f_replace):
-                os.makedirs(f_replace, exist_ok=True)
-                average = tf.zeros(
-                                    (512, 512), dtype=tf.dtypes.float32, name=None
-                                )
-                style_features, content_features = get_feature_representations(model, f)
-                gram_style_features = [gram_matrix(style_feature) for style_feature in style_features]
-                gram_content_features = [gram_matrix(content_feature) for content_feature in content_features]
-                for ln, c in zip(content_layers, gram_content_features):
-                    pad_size = int((512 - c.shape[0])/2)
-                    paddings = tf.constant([[pad_size, pad_size, ], [pad_size, pad_size]])
-                    average += tf.pad(c, paddings, 'CONSTANT', constant_values=0)
-                    pp = os.path.join(f_replace, ln + '.pkl')
-                    file = open(pp, "xb")
-                    pickle.dump(c, file)
-                    file.close()
-                for ln, g in zip(style_layers, gram_style_features):
-                    pad_size = int((512 - g.shape[0])/2)
-                    paddings = tf.constant([[pad_size, pad_size, ], [pad_size, pad_size]])
-                    average += tf.pad(g, paddings, 'CONSTANT', constant_values=0)
-                    pp = os.path.join(f_replace, ln + '.pkl')
-                    file = open(pp, "xb")
-                    pickle.dump(g, file)
-                    file.close()
-                average /= (num_style_layers + num_content_layers)
-                pp = os.path.join(f_replace, 'average' + '.pkl')
-                file = open(pp, "xb")
-                pickle.dump(average, file)
-                file.close()
-            sqldb.insert_vector_data(image_id=image_data[0], vector_path=f_replace)
+            average = tf.zeros((512, 512), dtype=tf.dtypes.float32, name=None)
+            style_features, content_features = get_feature_representations(model, image_arr)
+            gram_style_features = [gram_matrix(style_feature) for style_feature in style_features]
+            gram_content_features = [gram_matrix(content_feature) for content_feature in content_features]
+            for ln, c in zip(content_layers, gram_content_features):
+                pad_size = int((512 - c.shape[0])/2)
+                paddings = tf.constant([[pad_size, pad_size, ], [pad_size, pad_size]])
+                average += tf.pad(c, paddings, 'CONSTANT', constant_values=0)
+                pickle_strings[ln] = pickle.dumps(c)
+            for ln, g in zip(style_layers, gram_style_features):
+                pad_size = int((512 - g.shape[0])/2)
+                paddings = tf.constant([[pad_size, pad_size, ], [pad_size, pad_size]])
+                average += tf.pad(g, paddings, 'CONSTANT', constant_values=0)
+                pickle_strings[ln] = pickle.dumps(g)
+            average /= (num_style_layers + num_content_layers)
+            pickle_strings['average'] = pickle.dumps(average)
+            sqldb.insert_vector_data(image_id=image_data[0], pickle_strings=pickle_strings)
             if previous_style != style:
                 print("Inserted vector data for style: " + str(style))
                 previous_style = style
         except Exception as e:
             print(e)
             break
+    exit(0)
     generate_average_vectors(sqldb)
 
 
@@ -295,7 +264,7 @@ def to_categorical_array(x):
 
 
 def get_training_data():
-    training_threshold = 50
+    training_threshold = 1
     x1 = list()
     x2 = list()
     x3 = list()
