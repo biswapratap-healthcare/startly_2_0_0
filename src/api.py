@@ -67,7 +67,7 @@ def create_app():
             try:
                 rv = dict()
                 style_dict = dict()
-                styles = sqldb.fetch_data(table='styles')
+                styles = sqldb.fetch_data(params=['*'], table='styles')
                 for style in styles:
                     style_dict[style[0]] = style[1]
                 rv['style_dict'] = style_dict
@@ -122,6 +122,15 @@ def create_app():
         global average_vectors_g
         average_vectors_g = value
 
+    layers = ['average',
+              'block1_conv1',
+              'block2_conv1',
+              'block3_conv1',
+              'block4_conv1',
+              'block5_conv1',
+              'block5_conv2',
+              'block5_pool']
+
     @api.route('/submit_result')
     @api.expect(training_data)
     class SubmitResult(Resource):
@@ -144,28 +153,20 @@ def create_app():
                 for style in style_list:
                     style_id = style['style_id']
                     percentage = int(style['percentage'])
-                    average_vectors = sqldb.fetch_data(table='average_vector_data')
+                    average_vectors = sqldb.fetch_data(params=['*'], table='average_vector_table')
                     if average_vectors_g != average_vectors:
                         style_vectors = dict()
                         for data in average_vectors:
                             style = data[0]
-                            vector_folder_path = data[1]
                             style_vectors[style] = dict()
-                            for vector_file in glob.glob(os.path.join(vector_folder_path, '*.pkl')):
-                                f = open(vector_file, 'rb')
-                                vector = pickle.load(f)
-                                f.close()
-                                style_vectors[style][os.path.basename(vector_file)] = vector
+                            for layer, vector in zip(layers, data[1:]):
+                                style_vectors[style][layer] = pickle.loads(vector)
                         change_global_var(average_vectors)
-                    image_vector_folder = sqldb.fetch_vector_paths(imageid=image_id)[0]
+                    image_vector_dict = sqldb.fetch_image_vectors(img_id=image_id)[0]
                     image_vector = dict()
-                    for vector_file in glob.glob(os.path.join(image_vector_folder, '*.pkl')):
-                        file = open(vector_file, 'rb')
-                        vector = pickle.load(file)
-                        file.close()
-                        image_vector[os.path.basename(vector_file)] = vector
-
-                    losses = []
+                    for layer, vector in image_vector_dict.items():
+                        image_vector[layer] = pickle.loads(vector)
+                    losses = list()
                     style = sqldb.fetch_style_name(style_id)
                     for vector_file in style_vectors[style].keys():
                         vector_file = vector_file

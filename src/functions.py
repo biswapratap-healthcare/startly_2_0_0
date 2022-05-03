@@ -93,11 +93,11 @@ def get_feature_representations(model, image_arr):
 
 
 def generate_average_vectors(sqldb):
-    styles = sqldb.fetch_data(table='styles')
+    styles = sqldb.fetch_data(params=['*'], table='styles')
     for style in styles:
         average_dict = {}
         style_name = style[1]
-        vector_list = sqldb.fetch_vector_paths(style=style_name)
+        vector_list = sqldb.fetch_image_vectors(style=style_name)
         n = len(vector_list)
         for vector_dict in vector_list:
             for layer, value in vector_dict.items():
@@ -118,8 +118,8 @@ def generate_gram_matrices():
     model = get_model()
     for layer in model.layers:
         layer.trainable = False
-    image_table = sqldb.fetch_image_ids(table="image_table")
-    vector_table = sqldb.fetch_image_ids(table="vector_table")
+    image_table = sqldb.fetch_data(params=['image_id'], table="image_table")
+    vector_table = sqldb.fetch_data(params=['image_id'], table="vector_table")
     vector_ids = set([e[0] for e in vector_table])
     image_ids = set([e[0] for e in image_table]) - vector_ids
     image_table = filter(lambda x: x[0] in image_ids, image_table)
@@ -213,18 +213,19 @@ def prepare_training_data():
 
 
 def get_input1(image_id):
-    imag_path = sqldb.fetch_image_paths(imageid=image_id)[0]
+    img_arr, style = sqldb.fetch_image_data(image_id=image_id)
     features_path = os.path.join('assets', 'feature_data')
-    style_dir = os.path.join(features_path, os.path.basename(os.path.dirname(imag_path)))
-    filename = os.path.basename(imag_path).split('.')[0] + '.npy'
+    style_dir = os.path.join(features_path, style)
+    filename = image_id + '.npy'
     filepath = os.path.join(style_dir, filename)
     if os.path.exists(filepath):
         return np.load(filepath)
     else:
         os.makedirs(features_path, exist_ok=True)
         os.makedirs(style_dir, exist_ok=True)
-
-        img = image.load_img(imag_path, target_size=(512, 512))
+        numpy_arr = pickle.loads(img_arr)
+        img = Image.fromarray(np.uint8(numpy_arr)).convert('RGB')
+        img = img.resize((512, 512))
         img = image.img_to_array(img)
         img = np.expand_dims(img, axis=0)
         img = preprocess_input(img)
@@ -237,11 +238,8 @@ def get_input1(image_id):
 def get_input2(average_vectors, style):
     for e in average_vectors:
         if e[0] == style:
-            style_vector_folder = e[1]
-            style_vector_file = os.path.join(style_vector_folder, 'average.pkl')
-            style_vector_file = open(style_vector_file, 'rb')
-            style_vector = pickle.load(style_vector_file)
-            style_vector_file.close()
+            average_pickle_vector = e[1]
+            style_vector = pickle.loads(average_pickle_vector)
             break
     return style_vector.numpy()
 
@@ -266,10 +264,10 @@ def get_training_data():
     x2 = list()
     x3 = list()
     y = list()
-    td = sqldb.fetch_data(table='training_data')
+    td = sqldb.fetch_data(params=['*'], table='training_table')
     if len(td) < training_threshold:
         return [], []
-    average_vectors = sqldb.fetch_data(table='average_vector_data')
+    average_vectors = sqldb.fetch_data(params=['*'], table='average_vector_table')
     idx = 0
     while idx < len(td):
         x1.append(get_input1(td[idx][0]))
@@ -293,23 +291,28 @@ def get_training_data():
 
 
 def get_images(style):
-    image_data = sqldb.fetch_data(table='image_data')
-    image_ids = set([e[0] for e in image_data if e[2] == style])
+    image_data = sqldb.fetch_data(params=['image_id', 'style'], table='image_table')
+    image_ids = set([e[0] for e in image_data if e[1] == style])
 
-    training_data = sqldb.fetch_data(table='training_data')
+    training_data = sqldb.fetch_data(params=['image_id'], table='training_table')
     training_ids = set([e[0] for e in training_data])
 
     image_ids_to_train = image_ids - training_ids
     image_data = list(filter(lambda x: x[0] in image_ids_to_train, image_data))
 
-    img = image_data[0][1]
-    pil_img = Image.open(img)
+    img = image_data[0]
+    img_id = img[0]
+
+    image_arr = sqldb.fetch_image_data(img_id)[0]
+    numpy_arr = pickle.loads(image_arr)
+    pil_img = Image.fromarray(np.uint8(numpy_arr)).convert('RGB')
+
     pil_img.thumbnail(image_size)
     return image_to_byte_array(pil_img), str(image_data[0][0])
 
 
 def get_style_images(style_id, page_num=None):
-    styles = sqldb.fetch_data(table='styles')
+    styles = sqldb.fetch_data(params=['*'], table='styles')
     try:
         if page_num is None:
             page_num = 0
@@ -317,9 +320,11 @@ def get_style_images(style_id, page_num=None):
             page_num = int(page_num) - 1
         style = styles[style_id][1]
         images = list()
-        style_images = sqldb.fetch_image_paths(style=style)
-        for image_ in style_images[page_num * 40: page_num * 40 + 40]:
-            image_ = Image.open(image_)
+        image_ids = sqldb.fetch_image_ids_of_style(style=style)
+        for image_id in image_ids[page_num * 40: page_num * 40 + 40]:
+            image_arr = sqldb.fetch_image_data(image_id)[0]
+            numpy_arr = pickle.loads(image_arr)
+            image_ = Image.fromarray(np.uint8(numpy_arr)).convert('RGB')
             image_.thumbnail(image_size)
             images.append(image_to_byte_array(image_))
         return str(images)

@@ -88,12 +88,16 @@ def train_model():
     x, y = get_training_data()
     if len(x) == 0:
         return None
-    hist = model.fit(x=x,
-                     y=y,
-                     batch_size=10,
-                     epochs=20,
-                     validation_split=0.30,
-                     verbose=1)
+    try:
+        hist = model.fit(x=x,
+                         y=y,
+                         batch_size=10,
+                         epochs=20,
+                         validation_split=0.30,
+                         verbose=1)
+    except Exception as e:
+        print(e)
+        return 0
     model_dir = os.path.join('assets', 'model')
     if os.path.exists(model_dir):
         shutil.rmtree(model_dir)
