@@ -5,8 +5,7 @@ from tensorflow.keras import Input
 from tensorflow.keras.layers import Dense, concatenate, Lambda
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
-
-from functions import get_training_data, prepare_training_data, sqldb
+from functions import get_training_data
 
 
 def get_training_model():
@@ -98,10 +97,11 @@ def train_model():
     except Exception as e:
         print(e)
         return 0
-    model_dir = os.path.join('assets', 'model')
-    if os.path.exists(model_dir):
-        shutil.rmtree(model_dir)
-    model.save(model_dir)
+    try:
+        model.save(filepath='model')
+    except Exception as e:
+        print(e)
+        return 0
     accuracy = dict()
     accuracy['training'] = hist.history['accuracy'][-1]
     accuracy['validation'] = hist.history['val_accuracy'][-1]

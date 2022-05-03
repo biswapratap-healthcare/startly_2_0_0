@@ -9,8 +9,8 @@ from flask import Flask
 from waitress import serve
 from flask_cors import CORS
 from flask_restplus import Resource, Api, reqparse
-from functions import get_images, get_style_images, add_entry, get_loss, sqldb
-
+from functions import get_images, get_style_images, add_entry, get_loss, sqldb, test_search
+from src.init_style_vector import style_vectors
 
 image_size = (512, 512)
 
@@ -77,6 +77,45 @@ def create_app():
                 rv['status'] = str(e)
                 return rv, 404
 
+    test_search_speed = reqparse.RequestParser()
+    test_search_speed.add_argument('style',
+                                   type=str,
+                                   help='The style filter.',
+                                   required=True)
+    test_search_speed.add_argument('base_threshold',
+                                   type=str,
+                                   help='Base threshold number.',
+                                   required=True)
+    test_search_speed.add_argument('filter_threshold',
+                                   type=str,
+                                   help='Filter threshold number.',
+                                   required=True)
+
+    @api.route('/test_search_speed')
+    @api.expect(test_search_speed)
+    class TestSearchSpeedService(Resource):
+        @api.expect(test_search_speed)
+        @api.doc(responses={"response": 'json'})
+        def post(self):
+            try:
+                args = test_search_speed.parse_args()
+            except Exception as e:
+                rv = dict()
+                rv['status'] = str(e)
+                return rv, 404
+            try:
+                style = args['style']
+                base_threshold = int(args['base_threshold'])
+                filter_threshold = int(args['filter_threshold'])
+                rv = dict()
+                rv['images'] = test_search(style, base_threshold, filter_threshold)
+                rv['status'] = 'Success'
+                return rv, 200
+            except Exception as e:
+                rv = dict()
+                rv['status'] = str(e)
+                return rv, 404
+
     get_style = reqparse.RequestParser()
     get_style.add_argument('style_id',
                            type=str,
@@ -116,21 +155,6 @@ def create_app():
                                help='{"image_id" : "1638803707364", "style_list":[{"style_id":"1","percentage":"30"},{"style_id":"2","percentage":"40"}]}',
                                required=True)
 
-    average_vectors_g = None
-
-    def change_global_var(value):
-        global average_vectors_g
-        average_vectors_g = value
-
-    layers = ['average',
-              'block1_conv1',
-              'block2_conv1',
-              'block3_conv1',
-              'block4_conv1',
-              'block5_conv1',
-              'block5_conv2',
-              'block5_pool']
-
     @api.route('/submit_result')
     @api.expect(training_data)
     class SubmitResult(Resource):
@@ -153,15 +177,6 @@ def create_app():
                 for style in style_list:
                     style_id = style['style_id']
                     percentage = int(style['percentage'])
-                    average_vectors = sqldb.fetch_data(params=['*'], table='average_vector_table')
-                    if average_vectors_g != average_vectors:
-                        style_vectors = dict()
-                        for data in average_vectors:
-                            style = data[0]
-                            style_vectors[style] = dict()
-                            for layer, vector in zip(layers, data[1:]):
-                                style_vectors[style][layer] = pickle.loads(vector)
-                        change_global_var(average_vectors)
                     image_vector_dict = sqldb.fetch_image_vectors(img_id=image_id)[0]
                     image_vector = dict()
                     for layer, vector in image_vector_dict.items():

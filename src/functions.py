@@ -1,7 +1,10 @@
 import datetime
 
+import keras
+
 from sql import SqlDatabase
 import os
+import time
 import glob
 import random
 import pickle
@@ -17,13 +20,11 @@ from tensorflow.keras.preprocessing import image
 from tensorflow.keras.models import Model
 from tensorflow.keras.applications.vgg19 import VGG19, preprocess_input
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+from src.init_style_vector import style_vectors, sqldb
 
 vgg = VGG19(include_top=False, weights='imagenet')
 vgg.trainable = False
 vgg = Model(inputs=vgg.input, outputs=vgg.output)
-
-sqldb = SqlDatabase()
 
 content_layers = ['block5_conv2']
 
@@ -214,25 +215,25 @@ def prepare_training_data():
 
 def get_input1(image_id):
     img_arr, style = sqldb.fetch_image_data(image_id=image_id)
-    features_path = os.path.join('assets', 'feature_data')
-    style_dir = os.path.join(features_path, style)
-    filename = image_id + '.npy'
-    filepath = os.path.join(style_dir, filename)
-    if os.path.exists(filepath):
-        return np.load(filepath)
-    else:
-        os.makedirs(features_path, exist_ok=True)
-        os.makedirs(style_dir, exist_ok=True)
-        numpy_arr = pickle.loads(img_arr)
-        img = Image.fromarray(np.uint8(numpy_arr)).convert('RGB')
-        img = img.resize((512, 512))
-        img = image.img_to_array(img)
-        img = np.expand_dims(img, axis=0)
-        img = preprocess_input(img)
-        img = vgg.predict(img)
-        img = img[0]
-        np.save(filepath, img)
-        return img
+    # features_path = os.path.join('assets', 'feature_data')
+    # style_dir = os.path.join(features_path, style)
+    # filename = image_id + '.npy'
+    # filepath = os.path.join(style_dir, filename)
+    # if os.path.exists(filepath):
+    #     return np.load(filepath)
+    # else:
+    #     os.makedirs(features_path, exist_ok=True)
+    #     os.makedirs(style_dir, exist_ok=True)
+    numpy_arr = pickle.loads(img_arr)
+    img = Image.fromarray(np.uint8(numpy_arr)).convert('RGB')
+    img = img.resize((512, 512))
+    img = image.img_to_array(img)
+    img = np.expand_dims(img, axis=0)
+    img = preprocess_input(img)
+    img = vgg.predict(img)
+    img = img[0]
+    # np.save(filepath, img)
+    return img
 
 
 def get_input2(average_vectors, style):
@@ -309,6 +310,52 @@ def get_images(style):
 
     pil_img.thumbnail(image_size)
     return image_to_byte_array(pil_img), str(image_data[0][0])
+
+
+def test_search(style, base_threshold, filter_threshold):
+    start_time = time.time()
+    image_ids = set([e[0] for e in sqldb.fetch_n_image_ids(n=base_threshold)])
+    base_time = time.time() - start_time
+    print('Base Time = ', base_time)
+    start_time = time.time()
+    model = keras.models.load_model(filepath='model')
+    model_load_time = time.time() - start_time
+    print('Model Load Time = ', model_load_time)
+    start_time = time.time()
+    average_vectors = sqldb.fetch_data(params=['*'], table='average_vector_table')
+    x2 = [get_input2(average_vectors, style)]
+    avg_vec_fetch_time = time.time() - start_time
+    print('Average Vector Fetch Time = ', avg_vec_fetch_time)
+    total_time = 0.0
+    for image_id in image_ids:
+        start_time = time.time()
+        x1 = [get_input1(image_id)]
+        image_vector_dict = sqldb.fetch_image_vectors(img_id=image_id)[0]
+        image_vector = dict()
+        for layer, vector in image_vector_dict.items():
+            image_vector[layer] = pickle.loads(vector)
+        losses = list()
+        for vector_file in style_vectors[style].keys():
+            loss = get_loss(image_vector[vector_file], style_vectors[style][vector_file]).numpy()
+            losses.append(math.log(loss, 10))
+        match_percentage = np.asarray(losses)
+        max_ = match_percentage.max()
+        min_ = match_percentage.min()
+        delta = max_ - min_
+        for idx in range(len(match_percentage)):
+            match_percentage[idx] = 100 - ((match_percentage[idx] - min_) * 100 / delta)
+        x1 = np.array(x1)
+        x2 = np.array(x2)
+        x3 = [np.array(match_percentage)]
+        x3 = np.array(x3)
+        x1 = x1.reshape(x1.shape[0], -1)
+        x2 = x2.reshape(x2.shape[0], -1)
+        x = [x1, x2, x3]
+        y = model.predict(x)
+        one_image_filter_time = time.time() - start_time
+        total_time += one_image_filter_time
+        print('One image filter Time = ', one_image_filter_time)
+    print('Average one image filter Time = ', total_time / base_threshold)
 
 
 def get_style_images(style_id, page_num=None):

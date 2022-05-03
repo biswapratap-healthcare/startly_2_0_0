@@ -197,6 +197,20 @@ class SqlDatabase:
             self.commit()
             return str(e)
 
+    def fetch_n_image_ids(self, n):
+        try:
+            sql_syntax = 'SELECT image_id FROM image_table limit ' + str(n) + ';'
+            self.cur.execute(sql_syntax)
+            data = self.cur.fetchall()
+            self.commit()
+        except Exception as e:
+            print("fetch_image_data", e)
+            curs = self.conn.cursor()
+            curs.execute("ROLLBACK")
+            self.commit()
+            data = list()
+        return data
+
     def fetch_image_data(self, image_id):
         try:
             sql_syntax = f''' SELECT image_arr, style FROM image_table WHERE image_id = '{image_id}';'''
