@@ -37,7 +37,7 @@ class SqlDatabase:
         self.conn = psycopg2.connect(
             f'dbname={self.config["dbname"]} '
             f'user={self.config["user"]} '
-            f'host=\'localhost\' '
+            f'host=\'image-database.cuph4zrmc7ss.ap-south-1.rds.amazonaws.com\' '
             f'password={self.config["password"]}')
         self.cur = self.conn.cursor()
         return None
@@ -51,7 +51,7 @@ class SqlDatabase:
     def create_table(self):
 
         sql_syntax = f'''CREATE TABLE IF NOT EXISTS public.average_vector_table (
-                style character NOT NULL,
+                style character varying NOT NULL,
                 average bytea,
                 block1_conv1 bytea,
                 block2_conv1 bytea,
@@ -66,24 +66,24 @@ class SqlDatabase:
         self.commit()
 
         sql_syntax = f'''CREATE TABLE IF NOT EXISTS public.image_table (
-               image_id character NOT NULL,
+               image_id character varying NOT NULL,
                image_arr bytea,
-               style character,
+               style character varying,
                CONSTRAINT image_table_pkey PRIMARY KEY (image_id))'''
 
         self.cur.execute(sql_syntax)
         self.commit()
 
         sql_syntax = f'''CREATE TABLE IF NOT EXISTS public.styles (
-               style_id character NOT NULL,
-               style character NOT NULL,
+               style_id character varying NOT NULL,
+               style character varying NOT NULL,
                CONSTRAINT styles_pkey PRIMARY KEY (style))'''
 
         self.cur.execute(sql_syntax)
         self.commit()
 
         sql_syntax = f'''CREATE TABLE IF NOT EXISTS public.vector_table (
-               image_id character NOT NULL,
+               image_id character varying NOT NULL,
                average bytea,
                block1_conv1 bytea,
                block2_conv1 bytea,
@@ -98,10 +98,10 @@ class SqlDatabase:
         self.commit()
 
         sql_syntax = f'''CREATE TABLE IF NOT EXISTS public.training_table (
-               image_id character NOT NULL,
-               style_name character NOT NULL,
-               layer_stats character,
-               score_stats character,
+               image_id character varying NOT NULL,
+               style_name character varying NOT NULL,
+               layer_stats character varying,
+               score_stats character varying,
                CONSTRAINT training_table_pkey PRIMARY KEY (image_id, style_name),
                CONSTRAINT training_table_image_id_fkey FOREIGN KEY (image_id)
                    REFERENCES public.vector_table (image_id) MATCH SIMPLE
@@ -329,11 +329,11 @@ class SqlDatabase:
     
     def drop_all(self):
         sql_syntax = f'''
-                DROP TABLE IF EXISTS training_data;
-                DROP TABLE IF EXISTS vector_data;
-                DROP TABLE IF EXISTS image_data;
+                DROP TABLE IF EXISTS training_table;
+                DROP TABLE IF EXISTS vector_table;
+                DROP TABLE IF EXISTS image_table;
                 DROP TABLE IF EXISTS styles;
-                DROP TABLE IF EXISTS average_vector_data;
+                DROP TABLE IF EXISTS average_vector_table;
                 '''
         self.cur.execute(sql_syntax)
         self.commit()

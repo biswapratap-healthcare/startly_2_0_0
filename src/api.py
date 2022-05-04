@@ -11,6 +11,7 @@ from flask_cors import CORS
 from flask_restplus import Resource, Api, reqparse
 from functions import get_images, get_style_images, add_entry, get_loss, sqldb, test_search
 from src.init_style_vector import style_vectors
+from src.model import init_model
 
 image_size = (512, 512)
 
@@ -71,6 +72,20 @@ def create_app():
                 for style in styles:
                     style_dict[style[0]] = style[1]
                 rv['style_dict'] = style_dict
+                return rv, 200
+            except Exception as e:
+                rv = dict()
+                rv['status'] = str(e)
+                return rv, 404
+
+    @api.route('/train_model')
+    class TrainModelService(Resource):
+        @api.doc(responses={"response": 'json'})
+        def post(self):
+            try:
+                rv = dict()
+                init_model()
+                rv['status'] = 'Success'
                 return rv, 200
             except Exception as e:
                 rv = dict()
