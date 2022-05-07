@@ -1,8 +1,4 @@
-import datetime
-
 import keras
-
-from sql import SqlDatabase
 import os
 import time
 import glob
@@ -312,21 +308,25 @@ def get_images(style):
     return image_to_byte_array(pil_img), str(image_data[0][0])
 
 
+if os.path.exists('model'):
+    start_time = time.time()
+    model = keras.models.load_model(filepath='model')
+    model_load_time = time.time() - start_time
+    print('Model Load Time = ', model_load_time)
+start_time = time.time()
+average_vectors = sqldb.fetch_data(params=['*'], table='average_vector_table')
+avg_vec_fetch_time = time.time() - start_time
+print('Average Vector Fetch Time = ', avg_vec_fetch_time)
+
+
 def test_search(style, base_threshold, filter_threshold):
     start_time = time.time()
     image_ids = set([e[0] for e in sqldb.fetch_n_image_ids(n=base_threshold)])
     base_time = time.time() - start_time
     print('Base Time = ', base_time)
-    start_time = time.time()
-    model = keras.models.load_model(filepath='model')
-    model_load_time = time.time() - start_time
-    print('Model Load Time = ', model_load_time)
-    start_time = time.time()
-    average_vectors = sqldb.fetch_data(params=['*'], table='average_vector_table')
     x2 = [get_input2(average_vectors, style)]
-    avg_vec_fetch_time = time.time() - start_time
-    print('Average Vector Fetch Time = ', avg_vec_fetch_time)
     total_time = 0.0
+    search_results = list()
     for image_id in image_ids:
         start_time = time.time()
         x1 = [get_input1(image_id)]
@@ -352,10 +352,19 @@ def test_search(style, base_threshold, filter_threshold):
         x2 = x2.reshape(x2.shape[0], -1)
         x = [x1, x2, x3]
         y = model.predict(x)
+
+        img_arr, style = sqldb.fetch_image_data(image_id=image_id)
+        numpy_arr = pickle.loads(img_arr)
+        search_results.append(base64.b64encode(numpy_arr).decode("utf-8"))
+
+        if len(search_results) >= filter_threshold:
+            break
+
         one_image_filter_time = time.time() - start_time
         total_time += one_image_filter_time
         print('One image filter Time = ', one_image_filter_time)
-    print('Average one image filter Time = ', total_time / base_threshold)
+    print('Average one image filter Time = ', total_time / filter_threshold)
+    return search_results
 
 
 def get_style_images(style_id, page_num=None):
