@@ -10,8 +10,8 @@ from waitress import serve
 from flask_cors import CORS
 from flask_restplus import Resource, Api, reqparse
 from functions import get_images, get_style_images, add_entry, get_loss, sqldb, test_search
-from src.init_style_vector import style_vectors
-from src.model import init_model
+from init_style_vector import style_vectors
+from model import init_model
 
 image_size = (512, 512)
 
@@ -221,4 +221,4 @@ def create_app():
 
 
 if __name__ == "__main__":
-    serve(create_app(), host='0.0.0.0', port=8000, threads=20)
+    serve(create_app(), host='0.0.0.0', port=8000, threads=100)

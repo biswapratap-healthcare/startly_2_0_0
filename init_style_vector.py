@@ -1,6 +1,6 @@
 import os
 import pickle
-from src.sql import SqlDatabase
+from sql import SqlDatabase
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 

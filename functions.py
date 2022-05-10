@@ -11,12 +11,13 @@ import io
 import base64
 from PIL import Image
 from tensorflow.keras import models
-from tensorflow.python.keras.preprocessing import image as kp_image
+#from tensorflow.python.keras.preprocessing import image as kp_image
+from keras.preprocessing import image as kp_image
 from tensorflow.keras.preprocessing import image
 from tensorflow.keras.models import Model
 from tensorflow.keras.applications.vgg19 import VGG19, preprocess_input
 
-from src.init_style_vector import style_vectors, sqldb
+from init_style_vector import style_vectors, sqldb
 
 vgg = VGG19(include_top=False, weights='imagenet')
 vgg.trainable = False
