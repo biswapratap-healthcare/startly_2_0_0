@@ -332,8 +332,8 @@ def get_image_vector(image_arr):
 
 
 def filter_image_fn(style, image_arr):
-    image_id = set([e[0] for e in sqldb.fetch_n_image_ids(n=1)])
-    image_arr = sqldb.fetch_image_data(image_id)
+    # image_id = list(set([e[0] for e in sqldb.fetch_n_image_ids(n=1)]))[0]
+    # image_arr = sqldb.fetch_image_data(image_id)[0]
     x2 = [get_input2(average_vectors, style)]
     x1 = [get_input1(image_arr)]
     image_vector = get_image_vector(image_arr)
