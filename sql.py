@@ -349,6 +349,3 @@ class SqlDatabase:
         self.cur.execute(sql_syntax)
         self.commit()
         self.create_table()
-
-
-sql = SqlDatabase()

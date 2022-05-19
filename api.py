@@ -123,6 +123,7 @@ def create_app():
                 return rv, 200
             except Exception as e:
                 rv = dict()
+                rv['result'] = "0"
                 rv['status'] = str(e)
                 return rv, 404
 
