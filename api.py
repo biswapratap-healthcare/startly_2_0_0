@@ -9,7 +9,7 @@ from flask import Flask
 from waitress import serve
 from flask_cors import CORS
 from flask_restplus import Resource, Api, reqparse
-from functions import get_images, get_style_images, add_entry, get_loss, sqldb, test_search
+from functions import get_images, get_style_images, add_entry, get_loss, sqldb, filter_image_fn
 from init_style_vector import style_vectors
 from model import init_model
 
@@ -92,38 +92,33 @@ def create_app():
                 rv['status'] = str(e)
                 return rv, 404
 
-    test_search_speed = reqparse.RequestParser()
-    test_search_speed.add_argument('style',
-                                   type=str,
-                                   help='The style filter.',
-                                   required=True)
-    test_search_speed.add_argument('base_threshold',
-                                   type=str,
-                                   help='Base threshold number.',
-                                   required=True)
-    test_search_speed.add_argument('filter_threshold',
-                                   type=str,
-                                   help='Filter threshold number.',
-                                   required=True)
+    filter_image = reqparse.RequestParser()
+    filter_image.add_argument('style',
+                              type=str,
+                              help='The style filter.',
+                              required=True)
+    filter_image.add_argument('image',
+                              type=str,
+                              help='The image.',
+                              required=True)
 
-    @api.route('/test_search_speed')
-    @api.expect(test_search_speed)
-    class TestSearchSpeedService(Resource):
-        @api.expect(test_search_speed)
+    @api.route('/filter_image')
+    @api.expect(filter_image)
+    class FilterImageService(Resource):
+        @api.expect(filter_image)
         @api.doc(responses={"response": 'json'})
         def post(self):
             try:
-                args = test_search_speed.parse_args()
+                args = filter_image.parse_args()
             except Exception as e:
                 rv = dict()
                 rv['status'] = str(e)
                 return rv, 404
             try:
                 style = args['style']
-                base_threshold = int(args['base_threshold'])
-                filter_threshold = int(args['filter_threshold'])
+                image = args['image']
                 rv = dict()
-                rv['images'] = test_search(style, base_threshold, filter_threshold)
+                rv['result'] = filter_image_fn(style, image)
                 rv['status'] = 'Success'
                 return rv, 200
             except Exception as e:

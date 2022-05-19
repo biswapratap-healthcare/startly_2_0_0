@@ -113,7 +113,7 @@ def generate_average_vectors(sqldb):
 
 
 def generate_gram_matrices():
-    model = get_model()
+    local_model = get_model()
     for layer in model.layers:
         layer.trainable = False
     image_table = sqldb.fetch_data(params=['image_id'], table="image_table")
@@ -130,7 +130,7 @@ def generate_gram_matrices():
         style = img_data[1]
         try:
             average = tf.zeros((512, 512), dtype=tf.dtypes.float32, name=None)
-            style_features, content_features = get_feature_representations(model, image_arr)
+            style_features, content_features = get_feature_representations(local_model, image_arr)
             gram_style_features = [gram_matrix(style_feature) for style_feature in style_features]
             gram_content_features = [gram_matrix(content_feature) for content_feature in content_features]
             for ln, c in zip(content_layers, gram_content_features):
@@ -210,17 +210,7 @@ def prepare_training_data():
             add_entry(idd, style, str(losses), str(scores))
 
 
-def get_input1(image_id):
-    img_arr, style = sqldb.fetch_image_data(image_id=image_id)
-    # features_path = os.path.join('assets', 'feature_data')
-    # style_dir = os.path.join(features_path, style)
-    # filename = image_id + '.npy'
-    # filepath = os.path.join(style_dir, filename)
-    # if os.path.exists(filepath):
-    #     return np.load(filepath)
-    # else:
-    #     os.makedirs(features_path, exist_ok=True)
-    #     os.makedirs(style_dir, exist_ok=True)
+def get_input1(img_arr):
     numpy_arr = pickle.loads(img_arr)
     img = Image.fromarray(np.uint8(numpy_arr)).convert('RGB')
     img = img.resize((512, 512))
@@ -229,7 +219,6 @@ def get_input1(image_id):
     img = preprocess_input(img)
     img = vgg.predict(img)
     img = img[0]
-    # np.save(filepath, img)
     return img
 
 
@@ -320,52 +309,51 @@ avg_vec_fetch_time = time.time() - start_time
 print('Average Vector Fetch Time = ', avg_vec_fetch_time)
 
 
-def test_search(style, base_threshold, filter_threshold):
-    start_time = time.time()
-    image_ids = set([e[0] for e in sqldb.fetch_n_image_ids(n=base_threshold)])
-    base_time = time.time() - start_time
-    print('Base Time = ', base_time)
+def get_image_vector(image_arr):
+    local_model = get_model()
+    pickle_strings = dict()
+    average = tf.zeros((512, 512), dtype=tf.dtypes.float32, name=None)
+    style_features, content_features = get_feature_representations(local_model, image_arr)
+    gram_style_features = [gram_matrix(style_feature) for style_feature in style_features]
+    gram_content_features = [gram_matrix(content_feature) for content_feature in content_features]
+    for ln, c in zip(content_layers, gram_content_features):
+        pad_size = int((512 - c.shape[0]) / 2)
+        paddings = tf.constant([[pad_size, pad_size, ], [pad_size, pad_size]])
+        average += tf.pad(c, paddings, 'CONSTANT', constant_values=0)
+        pickle_strings[ln] = c
+    for ln, g in zip(style_layers, gram_style_features):
+        pad_size = int((512 - g.shape[0]) / 2)
+        paddings = tf.constant([[pad_size, pad_size, ], [pad_size, pad_size]])
+        average += tf.pad(g, paddings, 'CONSTANT', constant_values=0)
+        pickle_strings[ln] = g
+    average /= (num_style_layers + num_content_layers)
+    pickle_strings['average'] = average
+    return pickle_strings
+
+
+def filter_image_fn(style, image_arr):
     x2 = [get_input2(average_vectors, style)]
-    total_time = 0.0
-    search_results = list()
-    for image_id in image_ids:
-        start_time = time.time()
-        x1 = [get_input1(image_id)]
-        image_vector_dict = sqldb.fetch_image_vectors(img_id=image_id)[0]
-        image_vector = dict()
-        for layer, vector in image_vector_dict.items():
-            image_vector[layer] = pickle.loads(vector)
-        losses = list()
-        for vector_file in style_vectors[style].keys():
-            loss = get_loss(image_vector[vector_file], style_vectors[style][vector_file]).numpy()
-            losses.append(math.log(loss, 10))
-        match_percentage = np.asarray(losses)
-        max_ = match_percentage.max()
-        min_ = match_percentage.min()
-        delta = max_ - min_
-        for idx in range(len(match_percentage)):
-            match_percentage[idx] = 100 - ((match_percentage[idx] - min_) * 100 / delta)
-        x1 = np.array(x1)
-        x2 = np.array(x2)
-        x3 = [np.array(match_percentage)]
-        x3 = np.array(x3)
-        x1 = x1.reshape(x1.shape[0], -1)
-        x2 = x2.reshape(x2.shape[0], -1)
-        x = [x1, x2, x3]
-        y = model.predict(x)
-
-        img_arr, style = sqldb.fetch_image_data(image_id=image_id)
-        numpy_arr = pickle.loads(img_arr)
-        search_results.append(base64.b64encode(numpy_arr).decode("utf-8"))
-
-        if len(search_results) >= filter_threshold:
-            break
-
-        one_image_filter_time = time.time() - start_time
-        total_time += one_image_filter_time
-        print('One image filter Time = ', one_image_filter_time)
-    print('Average one image filter Time = ', total_time / filter_threshold)
-    return search_results
+    x1 = [get_input1(image_arr)]
+    image_vector = get_image_vector(image_arr)
+    losses = list()
+    for vector_file in style_vectors[style].keys():
+        loss = get_loss(image_vector[vector_file], style_vectors[style][vector_file]).numpy()
+        losses.append(math.log(loss, 10))
+    match_percentage = np.asarray(losses)
+    max_ = match_percentage.max()
+    min_ = match_percentage.min()
+    delta = max_ - min_
+    for idx in range(len(match_percentage)):
+        match_percentage[idx] = 100 - ((match_percentage[idx] - min_) * 100 / delta)
+    x1 = np.array(x1)
+    x2 = np.array(x2)
+    x3 = [np.array(match_percentage)]
+    x3 = np.array(x3)
+    x1 = x1.reshape(x1.shape[0], -1)
+    x2 = x2.reshape(x2.shape[0], -1)
+    x = [x1, x2, x3]
+    y = model.predict(x)
+    return "1"
 
 
 def get_style_images(style_id, page_num=None):
