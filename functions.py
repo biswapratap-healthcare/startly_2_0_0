@@ -257,10 +257,10 @@ def get_training_data():
     td = sqldb.fetch_data(params=['*'], table='training_table')
     if len(td) < training_threshold:
         return [], []
-    average_vectors = sqldb.fetch_data(params=['*'], table='average_vector_table')
     idx = 0
     while idx < len(td):
-        x1.append(get_input1(td[idx][0]))
+        img_arr = sqldb.fetch_image_data(td[idx][0])[0]
+        x1.append(get_input1(img_arr))
         x2.append(get_input2(average_vectors, td[idx][1]))
         a = td[idx][2]
         b = eval(a)
@@ -269,7 +269,6 @@ def get_training_data():
         b = eval(a)
         y.append(np.array(b))
         idx += 1
-    
     x1 = np.array(x1)
     x2 = np.array(x2)
     x3 = np.array(x3)
@@ -335,6 +334,7 @@ def get_image_vector(image_arr):
 
 
 def filter_image_fn(style, image_url):
+    print("Prediction on --> " + image_url)
     response = requests.get(image_url, allow_redirects=True)
     tmp = tempfile.NamedTemporaryFile()
     with open(tmp.name, 'wb') as f:
