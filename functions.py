@@ -3,13 +3,16 @@ import os
 import time
 import glob
 import random
+import tempfile
 import pickle
 import math
 import numpy as np
 import tensorflow as tf
 import io
 import base64
+import requests
 from PIL import Image
+from numpy import asarray
 from tensorflow.keras import models
 #from tensorflow.python.keras.preprocessing import image as kp_image
 from keras.preprocessing import image as kp_image
@@ -331,11 +334,15 @@ def get_image_vector(image_arr):
     return pickle_strings
 
 
-def filter_image_fn(style, image_arr):
-    # image_id = list(set([e[0] for e in sqldb.fetch_n_image_ids(n=1)]))[0]
-    # image_arr = sqldb.fetch_image_data(image_id)[0]
-    # image_str_arr = base64.b64encode(image_arr)
-    image_arr = base64.b64decode(image_arr)
+def filter_image_fn(style, image_url):
+    response = requests.get(image_url, allow_redirects=True)
+    tmp = tempfile.NamedTemporaryFile()
+    with open(tmp.name, 'wb') as f:
+        f.write(response.content)
+    image = Image.open(tmp.name)
+    data = asarray(image)
+    image_arr = pickle.dumps(data)
+    tmp.close()
     x2 = [get_input2(average_vectors, style)]
     x1 = [get_input1(image_arr)]
     image_vector = get_image_vector(image_arr)

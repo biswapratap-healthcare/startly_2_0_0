@@ -116,9 +116,9 @@ def create_app():
                 return rv, 404
             try:
                 style = args['style']
-                image = args['image']
+                image_url = args['image']
                 rv = dict()
-                rv['result'] = filter_image_fn(style, image)
+                rv['result'] = filter_image_fn(style, image_url)
                 rv['status'] = 'Success'
                 return rv, 200
             except Exception as e:
